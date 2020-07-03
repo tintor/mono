@@ -1,1 +1,10 @@
-build --cxxopt='-std=c++17'
+build --cxxopt=-std=c++17
+build --cxxopt=-Wfatal-errors
+build --cxxopt=-g
+
+build --cxxopt=-O3
+build --cxxopt=-mavx2
+build --cxxopt=-mfma
+build --cxxopt=-ffast-math
+build --cxxopt=-ffp-contract=fast
+build --cxxopt=-DNDEBUG
