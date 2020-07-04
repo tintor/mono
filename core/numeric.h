@@ -1,6 +1,12 @@
 #pragma once
 #include <limits>
+#include <cmath>
 #include "core/auto.h"
+
+constexpr double PI = M_PI;
+constexpr double INF = std::numeric_limits<double>::infinity();
+
+// --------
 
 static_assert(sizeof(char) == 1);
 static_assert(sizeof(short) == 2);
