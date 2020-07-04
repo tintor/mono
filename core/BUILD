@@ -31,6 +31,10 @@ cc_library(
 )
 
 library(
+    name = "auto",
+)
+
+library(
     name = "dim4",
     deps = [":numeric", ":span", ":check", "@fmt"],
 )
