@@ -30,18 +30,10 @@ cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 library(name = "string", srcs = ["string.cc"], deps = [":span", ":algorithm", ":numeric"])
 library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":string", ":auto"])
 
-library(
-    name = "dim4",
-    deps = [":numeric", ":span", ":check", "@fmt"],
-)
-
+library(name = "dim4", deps = [":numeric", ":span", ":check", "@fmt"])
 library(name = "tensor", deps = [":dim4"])
 
-cc_library(
-    name = "random",
-    hdrs = ["random.h"],
-    deps = [":span"],
-)
+cc_library(name = "random", hdrs = ["random.h"], deps = [":span"])
 
 cc_library(
     name = "timestamp",
@@ -50,10 +42,7 @@ cc_library(
     deps = [":algorithm", ":auto", ":numeric"],
 )
 
-cc_library(
-    name = "align_alloc",
-    hdrs = ["align_alloc.h"],
-)
+cc_library(name = "align_alloc", hdrs = ["align_alloc.h"])
 
 library(name = "thread", deps = [":numeric"])
 library(name = "range", deps = [":span", "@fmt"])
@@ -78,3 +67,5 @@ library(
     deps = [":timestamp", ":optimizer", ":vector"],
     test_deps = [":thread", ":range", ":vector"],
 )
+
+library(name = "sparse_matrix")
