@@ -76,3 +76,5 @@ library(
     name = "diff",
     deps = [":random", ":algorithm", ":tensor", ":util", ":check"],
 )
+
+library(name = "array_deque", deps = [":numeric"])
