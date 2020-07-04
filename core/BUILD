@@ -51,6 +51,13 @@ cc_library(
 )
 
 cc_library(
+    name = "timestamp",
+    hdrs = ["timestamp.h"],
+    srcs = ["timestamp.cc"],
+    deps = [":algorithm", ":auto", ":numeric"],
+)
+
+cc_library(
     name = "align_alloc",
     hdrs = ["align_alloc.h"],
 )
