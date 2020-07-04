@@ -78,3 +78,5 @@ library(
 )
 
 library(name = "array_deque", deps = [":numeric"])
+
+library(name = "range", deps = [":span", "@fmt"])
