@@ -5,7 +5,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
-#include "core/int.h"
+#include "core/numeric.h"
 #include "core/check.h"
 #include "core/span.h"
 

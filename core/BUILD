@@ -1,8 +1,8 @@
 load("//:library.bzl", "library")
 
 cc_library(
-    name = "int",
-    hdrs = ["int.h"],
+    name = "numeric",
+    hdrs = ["numeric.h"],
 )
 
 cc_library(
@@ -20,7 +20,7 @@ cc_library(
 
 library(
     name = "dim4",
-    deps = [":int", ":span", ":check", "@fmt"],
+    deps = [":numeric", ":span", ":check", "@fmt"],
 )
 
 library(
