@@ -66,3 +66,8 @@ library(
     name = "util",
     deps = [":span"],
 )
+
+library(
+    name = "thread",
+    deps = [":numeric"],
+)
