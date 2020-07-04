@@ -17,6 +17,13 @@ cc_library(
     deps = ["@absl//absl/types:span"],
 )
 
+cc_library(
+    name = "column",
+    hdrs = ["column.h"],
+    srcs = ["column.cc"],
+    deps = [":numeric"],
+)
+
 library(name = "algorithm", deps = [":span"])
 cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 
