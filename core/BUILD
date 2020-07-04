@@ -69,3 +69,4 @@ library(
 )
 
 library(name = "sparse_matrix")
+library(name = "bits", hdrs = ["murmur3.h", "bits_util.h"], deps = [":numeric"])

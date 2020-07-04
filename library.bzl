@@ -1,7 +1,7 @@
-def library(name, srcs=[], deps=[], test_deps=[]):
+def library(name, hdrs=[], srcs=[], deps=[], test_deps=[]):
   native.cc_library(
     name = name,
-    hdrs = [name + ".h"],
+    hdrs = [name + ".h"] + hdrs,
     srcs = srcs,
     deps = deps,
   )
