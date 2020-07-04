@@ -71,3 +71,8 @@ library(
     name = "thread",
     deps = [":numeric"],
 )
+
+library(
+    name = "diff",
+    deps = [":random", ":algorithm", ":tensor", ":util", ":check"],
+)
