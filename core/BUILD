@@ -17,14 +17,27 @@ cc_library(
 )
 
 cc_library(
+    name = "dim4",
+    hdrs = ["dim4.h"],
+    deps = [":int", ":span", ":check", "@fmt"],
+)
+
+cc_test(
+    name = "dim4_test",
+    srcs = ["dim4_test.cc"],
+    deps = [":dim4", "//:catch"],
+    args = ["-d=yes"],
+)
+
+cc_library(
     name = "tensor",
     hdrs = ["tensor.h"],
-    deps = [":int", ":span", "@fmt"],
+    deps = [":dim4"],
 )
 
 cc_test(
     name = "tensor_test",
     srcs = ["tensor_test.cc"],
-    deps = [":tensor", ":check", "@fmt", "//:catch"],
+    deps = [":tensor", "//:catch"],
     args = ["-d=yes"],
 )
