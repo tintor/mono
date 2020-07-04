@@ -19,6 +19,12 @@ cc_library(
     deps = ["@absl//absl/types:span"],
 )
 
+cc_library(
+    name = "vector",
+    hdrs = ["vector.h"],
+    deps = ["@boost//:container"],
+)
+
 library(
     name = "dim4",
     deps = [":numeric", ":span", ":check", "@fmt"],
