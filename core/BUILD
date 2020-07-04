@@ -27,9 +27,8 @@ cc_library(
 library(name = "algorithm", deps = [":span"])
 cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 
-library(name = "string_util", deps = [":span", ":algorithm"])
-library(name = "util", srcs = ["util.cc"], deps = [":numeric", ":span", ":string_util"])
-library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":util", ":string_util", ":auto"])
+library(name = "string", srcs = ["string.cc"], deps = [":span", ":algorithm", ":numeric"])
+library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":string", ":auto"])
 
 library(
     name = "dim4",
@@ -63,7 +62,7 @@ library(name = "array_deque", deps = [":numeric"])
 library(
     name = "diff",
     srcs = ["diff.cc"],
-    deps = [":random", ":range", ":algorithm", ":tensor", ":util", ":check"],
+    deps = [":random", ":range", ":algorithm", ":tensor", ":string", ":check"],
 )
 
 cc_library(

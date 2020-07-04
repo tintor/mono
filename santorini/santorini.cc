@@ -9,8 +9,7 @@
 #include "core/callstack.h"
 #include "core/model.h"
 #include "core/thread.h"
-#include "core/util.h"
-#include "core/thread.h"
+#include "core/string.h"
 #include "core/timestamp.h"
 #include "core/vector.h"
 

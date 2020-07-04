@@ -6,8 +6,7 @@
 
 #include "core/auto.h"
 #include "core/callstack.h"
-#include "core/string_util.h"
-#include "core/util.h"
+#include "core/string.h"
 #include "core/numeric.h"
 
 using namespace std;

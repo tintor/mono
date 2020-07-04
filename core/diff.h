@@ -1,6 +1,6 @@
 #pragma once
 #include "core/tensor.h"
-#include "core/util.h"
+#include "core/string.h"
 #include "core/algorithm.h"
 #include "core/random.h"
 
