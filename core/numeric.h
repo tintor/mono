@@ -34,7 +34,7 @@ inline bool add_overflow(Int a, Int b) {
 
 // --------
 
-#define FOR_INTERNAL(I, COUNT, VAR) for (decltype(COUNT) VAR = COUNT, I = 0; I < VAR; I++)
+#define FOR_INTERNAL(I, COUNT, VAR) for (std::remove_reference_t<decltype(COUNT)> VAR = COUNT, I = 0; I < VAR; I++)
 #define FOR(I, COUNT) FOR_INTERNAL(I, COUNT, TOKEN_PASTE(_count_, __COUNTER__))
 
 // --------
