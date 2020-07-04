@@ -1,4 +1,4 @@
-def library(name, srcs=[], deps=[]):
+def library(name, srcs=[], deps=[], test_deps=[]):
   native.cc_library(
     name = name,
     hdrs = [name + ".h"],
@@ -9,6 +9,6 @@ def library(name, srcs=[], deps=[]):
   native.cc_test(
     name = name + "_test",
     srcs = [name + "_test.cc"],
-    deps = [":" + name, "//:catch"],
+    deps = test_deps + [":" + name, "//:catch"],
     args = ["-d=yes"],
   )
