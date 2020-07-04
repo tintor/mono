@@ -27,6 +27,10 @@ cc_library(
 library(name = "algorithm", deps = [":span"])
 cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 
+library(name = "string_util", deps = [":span", ":algorithm"])
+library(name = "util", srcs = ["util.cc"], deps = [":numeric", ":span", ":string_util"])
+library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":util", ":string_util", ":auto"])
+
 library(
     name = "dim4",
     deps = [":numeric", ":span", ":check", "@fmt"],
@@ -52,8 +56,6 @@ cc_library(
     hdrs = ["align_alloc.h"],
 )
 
-library(name = "string_util", deps = [":span", ":algorithm"])
-library(name = "util", srcs = ["util.cc"], deps = [":numeric", ":span", ":string_util"])
 library(name = "thread", deps = [":numeric"])
 library(name = "range", deps = [":span", "@fmt"])
 library(name = "array_deque", deps = [":numeric"])

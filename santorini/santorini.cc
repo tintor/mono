@@ -6,7 +6,7 @@
 #include "fmt/ostream.h"
 
 #include "core/random.h"
-//#include "core/callstack.h"
+#include "core/callstack.h"
 #include "core/model.h"
 #include "core/thread.h"
 #include "core/util.h"
@@ -1101,7 +1101,7 @@ void Browse(const Values& values) {
 }
 
 int main(int argc, char** argv) {
-    // InitSegvHandler(); TODO(Marko)
+    InitSegvHandler();
     Timestamp::init();
 
     if (argc > 1 && argv[1] == "learn"s) {
