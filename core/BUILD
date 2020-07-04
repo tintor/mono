@@ -1,3 +1,4 @@
+package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
 cc_library(
@@ -26,4 +27,10 @@ library(
 library(
     name = "tensor",
     deps = [":dim4"],
+)
+
+cc_library(
+    name = "random",
+    hdrs = ["random.h"],
+    deps = [":span"],
 )
