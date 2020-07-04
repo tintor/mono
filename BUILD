@@ -3,7 +3,7 @@ package(default_visibility = ["//visibility:public"])
 cc_binary(
     name = "hello",
     srcs = ["hello.cc"],
-    deps = ["@fmt", "//core:random"],
+    deps = ["@fmt", "//core:random", "//core:align_alloc"],
 )
 
 cc_library(

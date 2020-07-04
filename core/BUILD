@@ -34,3 +34,8 @@ cc_library(
     hdrs = ["random.h"],
     deps = [":span"],
 )
+
+cc_library(
+    name = "align_alloc",
+    hdrs = ["align_alloc.h"],
+)
