@@ -1,4 +1,5 @@
 #include "core/diff.h"
+#include "core/range.h"
 
 thread_local bool DiffT::has_overload;
 
@@ -22,8 +23,8 @@ struct BroadcastS : public Diff1 {
 
 Diff Broadcast(Diff a, dim4 b) {
     if (a->shape() == b) return a;
-    if (a->elements() == 1) return make_shared<BroadcastS>(a, b);
-    // if (a->shape == b.last(a->rank)) return make_shared<BroadcastT>(a, b);
+    if (a->elements() == 1) return std::make_shared<BroadcastS>(a, b);
+    // if (a->shape == b.last(a->rank)) return std::make_shared<BroadcastT>(a, b);
     Check(false);
     return nullptr;
 }
@@ -51,7 +52,7 @@ struct Add_vs : public Diff_vs {
 struct Add_mv : public Diff2 {
     Add_mv(Diff a, Diff b) : Diff2(a, b) {
         Check(a->shape().pop_front() == b->shape(),
-            format("a:%s b:%s a.pop_front:%s", string(a->shape()), string(b->shape()), string(a->shape().pop_front())));
+            fmt::format("a:{} b:{} a.pop_front:{}", a->shape(), b->shape(), a->shape().pop_front()));
         Reshape(a->shape());
     }
     void Forward(bool) override {
@@ -67,13 +68,12 @@ struct Add_mv : public Diff2 {
 };
 
 Diff operator+(Diff a, Diff b) {
-    dim4 as = a->shape(), bs = b->shape();
-    if (a->elements() == 1 && !a->batched()) return make_shared<Add_vs>(b, a);
-    if (b->elements() == 1 && !b->batched()) return make_shared<Add_vs>(a, b);
-    if (a->shape() == b->shape()) return make_shared<Add_vv>(a, b);
-    if (a->ndims() > b->ndims()) return make_shared<Add_mv>(a, b);
-    if (b->ndims() > a->ndims()) return make_shared<Add_mv>(b, a);
-    Fail(format("Incompatible shapes: %s vs %s", string(a->shape()), string(b->shape())));
+    if (a->elements() == 1 && !a->batched()) return std::make_shared<Add_vs>(b, a);
+    if (b->elements() == 1 && !b->batched()) return std::make_shared<Add_vs>(a, b);
+    if (a->shape() == b->shape()) return std::make_shared<Add_vv>(a, b);
+    if (a->ndims() > b->ndims()) return std::make_shared<Add_mv>(a, b);
+    if (b->ndims() > a->ndims()) return std::make_shared<Add_mv>(b, a);
+    Fail(fmt::format("Incompatible shapes: {} vs {}", a->shape(), b->shape()));
     return nullptr;
 }
 
@@ -116,12 +116,12 @@ struct Neg : public DiffA {
 };
 
 Diff operator-(Diff a, Diff b) {
-    if (a->elements() == 1 && !a->batched()) return make_shared<Sub_sv>(a, b);
-    if (b->elements() == 1 && !b->batched()) return make_shared<Sub_vs>(a, b);
-    return make_shared<Sub_vv>(a, b);
+    if (a->elements() == 1 && !a->batched()) return std::make_shared<Sub_sv>(a, b);
+    if (b->elements() == 1 && !b->batched()) return std::make_shared<Sub_vs>(a, b);
+    return std::make_shared<Sub_vv>(a, b);
 }
 
-Diff operator-(Diff a) { return make_shared<Neg>(a); }
+Diff operator-(Diff a) { return std::make_shared<Neg>(a); }
 Diff operator-(tensor::type a, Diff b) { return (a == 0) ? -b : (Const(a) - b); }
 Diff operator-(Diff a, tensor::type b) { return (b == 0) ? a : (a - Const(b)); }
 
@@ -151,7 +151,7 @@ struct Mul_vv : public Diff_vv {
 struct Mul_mv : public Diff2 {
     Mul_mv(Diff a, Diff b) : Diff2(a, b) {
         Check(a->shape().pop_front() == b->shape(),
-            format("a:%s b:%s a.pop_front:%s", string(a->shape()), string(b->shape()), string(a->shape().pop_front())));
+            fmt::format("a:{} b:{} a.pop_front:{}", a->shape(), b->shape(), a->shape().pop_front()));
         Reshape(a->shape());
     }
     void Forward(bool) override {
@@ -180,12 +180,12 @@ struct Mul_mv : public Diff2 {
 };
 
 Diff operator*(Diff a, Diff b) {
-    if (a->elements() == 1 && !a->batched()) return make_shared<Mul_vs>(b, a);
-    if (b->elements() == 1 && !b->batched()) return make_shared<Mul_vs>(a, b);
-    if (a->shape() == b->shape()) return make_shared<Mul_vv>(a, b);
-    if (a->ndims() > b->ndims()) return make_shared<Mul_mv>(a, b);
-    if (b->ndims() > a->ndims()) return make_shared<Mul_mv>(b, a);
-    Fail(format("Incompatible shapes: %s vs %s", string(a->shape()), string(b->shape())));
+    if (a->elements() == 1 && !a->batched()) return std::make_shared<Mul_vs>(b, a);
+    if (b->elements() == 1 && !b->batched()) return std::make_shared<Mul_vs>(a, b);
+    if (a->shape() == b->shape()) return std::make_shared<Mul_vv>(a, b);
+    if (a->ndims() > b->ndims()) return std::make_shared<Mul_mv>(a, b);
+    if (b->ndims() > a->ndims()) return std::make_shared<Mul_mv>(b, a);
+    Fail(fmt::format("Incompatible shapes: {} vs {}", a->shape(), b->shape()));
     return nullptr;
 }
 
@@ -236,12 +236,12 @@ struct InvT : public DiffA {
     void Backward() override { EACH(ga) ga[i] -= g[i] * sqr(v[i]); }
 };
 
-Diff Inv(Diff a) { return make_shared<InvT>(a); }
+Diff Inv(Diff a) { return std::make_shared<InvT>(a); }
 
 Diff operator/(Diff a, Diff b) {
-    if (a->elements() == 1 && !a->batched()) return make_shared<Div_sv>(a, b);
-    if (b->elements() == 1 && !b->batched()) return make_shared<Mul_vs>(a, Inv(b));
-    return make_shared<Div_vv>(a, b);
+    if (a->elements() == 1 && !a->batched()) return std::make_shared<Div_sv>(a, b);
+    if (b->elements() == 1 && !b->batched()) return std::make_shared<Mul_vs>(a, Inv(b));
+    return std::make_shared<Div_vv>(a, b);
 }
 
 Diff operator/(tensor::type a, Diff b) { return (a == 1) ? Inv(b) : (Const(a) / b); }
@@ -290,7 +290,7 @@ struct PowT : public Diff2 {
     }
 };
 
-Diff Pow(Diff a, Diff b) { return make_shared<PowT>(a, b); }
+Diff Pow(Diff a, Diff b) { return std::make_shared<PowT>(a, b); }
 
 // ----------------------
 
@@ -303,7 +303,7 @@ struct MinT : public Diff_vv {
     }
 };
 
-Diff Min(Diff a, Diff b) { return make_shared<MinT>(a, b); }
+Diff Min(Diff a, Diff b) { return std::make_shared<MinT>(a, b); }
 
 struct MaxT : public Diff_vv {
     MaxT(Diff a, Diff b) : Diff_vv(a, b) {}
@@ -314,7 +314,7 @@ struct MaxT : public Diff_vv {
     }
 };
 
-Diff Max(Diff a, Diff b) { return make_shared<MaxT>(a, b); }
+Diff Max(Diff a, Diff b) { return std::make_shared<MaxT>(a, b); }
 
 // ----------------------
 
@@ -339,7 +339,7 @@ struct ConcatT : public Diff2 {
     }
 };
 
-Diff Concat(Diff a, Diff b) { return make_shared<ConcatT>(a, b); }
+Diff Concat(Diff a, Diff b) { return std::make_shared<ConcatT>(a, b); }
 
 // ----------------------
 
@@ -355,7 +355,7 @@ struct ReshapeT : public Diff1 {
     void Backward() override { EACH(ga) ga[i] = g[i]; }
 };
 
-Diff Reshape(Diff a, dim4 shape) { return make_shared<ReshapeT>(a, shape); }
+Diff Reshape(Diff a, dim4 shape) { return std::make_shared<ReshapeT>(a, shape); }
 
 // ----------------------
 
@@ -366,7 +366,7 @@ struct VecMatMulT : public Diff2 {
     VecMatMulT(Diff a, Diff b) : Diff2(a, b) {
         dim4 as = a->shape(), bs = b->shape();
         Check(as.ndims() > 0);
-        Check(bs.ndims() == 2, format("a:%s b:%s", as, bs));
+        Check(bs.ndims() == 2, fmt::format("a:{} b:{}", as, bs));
         Check(as.back() == bs.back());
         Reshape(as.pop_back().push_back(bs[0], bs.name(0)));
     }
@@ -409,7 +409,7 @@ struct VecMatMulT : public Diff2 {
     }
 };
 
-Diff VecMatMul(Diff a, Diff b) { return make_shared<VecMatMulT>(a, b); }
+Diff VecMatMul(Diff a, Diff b) { return std::make_shared<VecMatMulT>(a, b); }
 
 // ----------------------
 
@@ -419,7 +419,7 @@ struct SumT : public Diff1 {
     void Backward() override { EACH(ga) ga[i] += g[0]; }
 };
 
-Diff Sum(Diff a) { return make_shared<SumT>(a); }
+Diff Sum(Diff a) { return std::make_shared<SumT>(a); }
 
 struct MeanT : public Diff1 {
     MeanT(Diff a) : Diff1(a) { Reshape({}); }
@@ -430,7 +430,7 @@ struct MeanT : public Diff1 {
     }
 };
 
-Diff Mean(Diff a) { return make_shared<MeanT>(a); }
+Diff Mean(Diff a) { return std::make_shared<MeanT>(a); }
 
 struct StdevT : public Diff2 {
     StdevT(Diff a, Diff b, tensor::type k) : Diff2(a, b), k(k) {
@@ -449,7 +449,7 @@ struct StdevT : public Diff2 {
     tensor::type k;
 };
 
-Diff Stdev(Diff a, Diff mean_a, tensor::type k) { return make_shared<StdevT>(a, mean_a, k); }
+Diff Stdev(Diff a, Diff mean_a, tensor::type k) { return std::make_shared<StdevT>(a, mean_a, k); }
 
 // ----------------------
 
@@ -555,14 +555,14 @@ struct Conv2DT : public Diff2 {
 };
 
 Diff Conv2D(Diff a, ConvType type, Diff b) {
-    Check(a->shape().dims() == "bwhc", format("a: expected 'bwhc', but got '%s'", a->shape().dims()));
-    Check(b->shape().dims() == "iwhc", format("b: expected 'iwhc', but got '%s'", b->shape().dims()));
+    Check(a->shape().dims() == "bwhc", fmt::format("a: expected 'bwhc', but got '{}'", a->shape().dims()));
+    Check(b->shape().dims() == "iwhc", fmt::format("b: expected 'iwhc', but got '{}'", b->shape().dims()));
     Check(a->dim(3) == b->dim(3));
     Check(b->dim(1) % 2 == 1);
     Check(b->dim(2) % 2 == 1);
     switch (type) {
-        case ConvType::Same: return make_shared<Conv2DT<false>>(a, b);
-        case ConvType::Valid: return make_shared<Conv2DT<true>>(a, b);
+        case ConvType::Same: return std::make_shared<Conv2DT<false>>(a, b);
+        case ConvType::Valid: return std::make_shared<Conv2DT<true>>(a, b);
     }
 }
 
@@ -639,7 +639,7 @@ struct RunningAverageT : public Diff1 {
     tensor::type k;
 };
 
-Diff RunningAverage(Diff a, float k) { return make_shared<RunningAverageT>(a, k); }
+Diff RunningAverage(Diff a, float k) { return std::make_shared<RunningAverageT>(a, k); }
 
 // Returns mean of all input values from prev epoch OR 0 if first epoch.
 struct EpochMeanT : public Diff1 {
@@ -659,14 +659,14 @@ struct EpochMeanT : public Diff1 {
 };
 
 Diff EpochMean(Diff a, float init) {
-    auto p = make_shared<EpochMeanT>(a);
+    auto p = std::make_shared<EpochMeanT>(a);
     p->v[0] = init;
     return p;
 }
 
 struct MeanSquareErrorT : public Diff2 {
     MeanSquareErrorT(Diff a, Diff b) : Diff2(a, b) {
-        Check(a->shape() == b->shape(), format("%s vs %s", string(a->shape()), string(b->shape())));
+        Check(a->shape() == b->shape(), fmt::format("{} vs {}", a->shape(), b->shape()));
         Reshape({});
     }
     void Forward(bool) override {
@@ -681,7 +681,7 @@ struct MeanSquareErrorT : public Diff2 {
     }
 };
 
-Diff MeanSquareError(Diff a, Diff b) { return make_shared<MeanSquareErrorT>(a, b); }
+Diff MeanSquareError(Diff a, Diff b) { return std::make_shared<MeanSquareErrorT>(a, b); }
 
 // ------------------------
 
@@ -702,7 +702,7 @@ inline bool EqualFP(T a, T b) {
 template <typename T>
 inline void CheckEqualFP(T a, T b) {
     if (!EqualFP(a, b))
-        Fail(format("Expected equality of %.10f and %.10f (abs error %g, rel error %g)", a, b, abs(a - b),
+        Fail(fmt::format("Expected equality of {.10f} and {.10f} (abs error {g}, rel error {g})", a, b, abs(a - b),
                     RelativeError(a, b)));
 }
 
@@ -720,7 +720,7 @@ struct ValueCmpT : public Diff_vv {
     }
 };
 
-Diff ValueCmp(Diff a, Diff b) { return make_shared<ValueCmpT>(a, b); }
+Diff ValueCmp(Diff a, Diff b) { return std::make_shared<ValueCmpT>(a, b); }
 
 struct GradCmpT : public DiffA {
     GradCmpT(Diff a) : DiffA(a) {}
@@ -731,16 +731,16 @@ struct GradCmpT : public DiffA {
         EACH(g) CheckEqualFP(g[i], other->g[i]);
     }
     void EndEpoch(bool) override {
-        if (counter != other->counter) Fail(format("%s != %s", counter, other->counter));
+        if (counter != other->counter) Fail(fmt::format("{} != {}", counter, other->counter));
     }
 
     uint counter = 0;
     GradCmpT* other;  // can't use shared_ptr because cyclic references
 };
 
-pair<Diff, Diff> GradCmp(Diff a) {
-    auto p = make_shared<GradCmpT>(a);
-    auto q = make_shared<GradCmpT>(a);
+std::pair<Diff, Diff> GradCmp(Diff a) {
+    auto p = std::make_shared<GradCmpT>(a);
+    auto q = std::make_shared<GradCmpT>(a);
     p->other = q.get();
     q->other = p.get();
     return {p, q};
@@ -756,7 +756,7 @@ struct BinaryCrossEntropyT : public Diff2 {
 
     BinaryCrossEntropyT(Diff ref, Diff out) : Diff2(ref, out) {
         Check(a->batched() == b->batched());
-        Check(a->shape().normalized() == b->shape().normalized(), format("%s vs %s", string(a->shape()), string(b->shape())));
+        Check(a->shape().normalized() == b->shape().normalized(), fmt::format("{} vs {}", a->shape(), b->shape()));
         Check(out->g);
         Check(!ref->g);
         Reshape({});
@@ -780,12 +780,12 @@ struct BinaryCrossEntropyT : public Diff2 {
     }
 };
 
-Diff BinaryCrossEntropy(Diff ref, Diff out) { return make_shared<BinaryCrossEntropyT>(ref, out); }
+Diff BinaryCrossEntropy(Diff ref, Diff out) { return std::make_shared<BinaryCrossEntropyT>(ref, out); }
 
 struct BinaryAccuracyT : public Diff2 {
     BinaryAccuracyT(Diff ref, Diff out) : Diff2(ref, out) {
         Check(a->batched() == b->batched());
-        Check(a->shape().normalized() == b->shape().normalized(), format("%s vs %s", string(a->shape()), string(b->shape())));
+        Check(a->shape().normalized() == b->shape().normalized(), fmt::format("{} vs {}", a->shape(), b->shape()));
         Check(!ref->g);
         v.reshape({});
     }
@@ -796,7 +796,7 @@ struct BinaryAccuracyT : public Diff2 {
     }
 };
 
-Diff BinaryAccuracy(Diff ref, Diff out) { return make_shared<BinaryAccuracyT>(ref, out); }
+Diff BinaryAccuracy(Diff ref, Diff out) { return std::make_shared<BinaryAccuracyT>(ref, out); }
 
 // ---------------------------
 
@@ -853,7 +853,7 @@ Diff BatchNorm(Diff a, tensor::type k) {
 
 struct KroneckerT : public Diff1 {
     KroneckerT(Diff a) : Diff1(a) {
-        Check(a->ndims() == 2 && a->batched(), string(a->shape()));
+        Check(a->ndims() == 2 && a->batched(), fmt::format("", a->shape()));
         Reshape(a->shape().push_back(a->shape().back()));
     }
     void Forward(bool) override {
@@ -871,7 +871,7 @@ struct KroneckerT : public Diff1 {
     }
 };
 
-Diff Kronecker(Diff a) { return make_shared<KroneckerT>(a); }
+Diff Kronecker(Diff a) { return std::make_shared<KroneckerT>(a); }
 
 float ComputePolynomial(float x, cspan<float> poly) {
     if (poly.size() == 0) return 0;
@@ -897,7 +897,7 @@ float ComputePolynomialDeriv(float x, cspan<float> poly) {
 
 struct PolynomialT : public Diff2 {
     PolynomialT(Diff a, uint degree, uint channels, std::shared_ptr<Init> init) : Diff2(a, Param({channels, degree + 1}, init)) {
-        Check(a->ndims() == 2 && a->batched(), string(a->shape()));
+        Check(a->ndims() == 2 && a->batched(), fmt::format("", a->shape()));
         Check(degree >= 1);
         Reshape(a->shape().push_back(channels, 'c'));
     }
@@ -932,4 +932,4 @@ struct PolynomialT : public Diff2 {
     }
 };
 
-Diff Polynomial(Diff a, uint degree, uint channels, std::shared_ptr<Init> init) { return make_shared<PolynomialT>(a, degree, channels, init); }
+Diff Polynomial(Diff a, uint degree, uint channels, std::shared_ptr<Init> init) { return std::make_shared<PolynomialT>(a, degree, channels, init); }

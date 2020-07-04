@@ -1,6 +1,10 @@
-#include <core/string_util.h>
-#include <core/util.h>
 #include <cxxabi.h>
+#include <iostream>
+
+#include "core/numeric.h"
+#include "core/util.h"
+#include "core/string_util.h"
+using namespace std;
 
 string Demangle(const char* name) {
     int status;
@@ -15,14 +19,14 @@ void PrintTable(cspan<string> rows, char separator, string_view splitter, cspan<
     for (const string& row : rows) {
         auto s = split(row, separator, false);
         if (s.size() > columns.size()) columns.resize(s.size());
-        for (size_t i = 0; i < s.size(); i++) columns[i] = max(columns[i], s[i].size());
+        FOR(i, s.size()) columns[i] = std::max(columns[i], s[i].size());
     }
     vector<bool> is_right(columns.size(), false);
     for (auto e : right) is_right[e] = true;
 
     for (const string& row : rows) {
         auto s = split(row, separator, false);
-        for (size_t i = 0; i < s.size(); i++) {
+        FOR(i, s.size()) {
             if (i > 0) cout << splitter;
             if (is_right[i])
                 for (size_t j = s[i].size(); j < columns[i]; j++) cout << ' ';

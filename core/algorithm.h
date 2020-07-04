@@ -180,6 +180,36 @@ Value Accum(const Iterable& iterable, const Value& init, const Accumulate& accum
     return acc;
 }
 
+// Welford algorithm for computing variance.
+// More numerically stable than naive sum of squares variance.
+template <typename T>
+class Accumulator {
+   public:
+    void operator<<(T a) {
+        m_count += 1;
+        double delta = a - m_mean;
+        m_mean += delta / m_count;
+        double delta2 = a - m_mean;
+        m_m2 += delta * delta2;
+
+        if (a < m_min) m_min = a;
+        if (a > m_max) m_max = a;
+    }
+
+    T mean() const { return m_mean; }
+    T variance() const { return m_m2 / m_count; }
+    T stdev() const { return sqrt(m_m2 / m_count); }
+    T min() const { return m_min; }
+    T max() const { return m_max; }
+
+   private:
+    size_t m_count = 0;
+    double m_mean = 0;
+    double m_m2 = 0;
+    T m_min = std::numeric_limits<T>::infinity();
+    T m_max = -std::numeric_limits<T>::infinity();
+};
+
 template <typename T>
 struct Aggregates {
     Aggregates(const T* begin, const T* end) {

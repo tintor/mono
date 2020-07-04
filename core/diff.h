@@ -140,6 +140,7 @@ inline Diff Const(const tensor c) {
 inline bool IsConst(Diff a) { return IsType<DiffT>(a) && !a->g; }
 
 struct Init {
+    virtual ~Init() {}
     virtual tensor::type get() { return 0; }
 };
 
