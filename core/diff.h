@@ -17,6 +17,7 @@ struct DiffT;
 using Diff = std::shared_ptr<DiffT>;
 
 struct DiffT {
+    virtual ~DiffT() {}
     virtual std::vector<Diff> Inputs() { return {}; }
 
     static thread_local bool has_overload;

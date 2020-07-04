@@ -62,15 +62,9 @@ cc_library(
     hdrs = ["align_alloc.h"],
 )
 
-library(
-    name = "util",
-    deps = [":span"],
-)
-
-library(
-    name = "thread",
-    deps = [":numeric"],
-)
+library(name = "util", deps = [":span"])
+library(name = "thread", deps = [":numeric"])
+library(name = "string_util", deps = [":span", ":algorithm"])
 
 library(
     name = "diff",
