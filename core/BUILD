@@ -29,6 +29,7 @@ cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 
 library(name = "string", srcs = ["string.cc"], deps = [":span", ":algorithm", ":numeric"])
 library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":string", ":auto"])
+cc_library(name = "exception", hdrs = ["exception.h"], deps = [":callstack", "@fmt"])
 
 library(name = "dim4", deps = [":numeric", ":span", ":check", "@fmt"])
 library(name = "tensor", deps = [":dim4"])
