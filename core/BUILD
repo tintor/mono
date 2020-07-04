@@ -1,9 +1,13 @@
 package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
-cc_library(
+library(
+    name = "auto",
+)
+
+library(
     name = "numeric",
-    hdrs = ["numeric.h"],
+    deps = [":auto"],
 )
 
 cc_library(
@@ -28,10 +32,6 @@ cc_library(
     name = "vector",
     hdrs = ["vector.h"],
     deps = ["@boost//:container"],
-)
-
-library(
-    name = "auto",
 )
 
 library(
@@ -60,4 +60,9 @@ cc_library(
 cc_library(
     name = "align_alloc",
     hdrs = ["align_alloc.h"],
+)
+
+library(
+    name = "util",
+    deps = [":span"],
 )
