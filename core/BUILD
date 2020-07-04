@@ -68,5 +68,6 @@ library(
     test_deps = [":thread", ":range", ":vector"],
 )
 
+library(name = "zip", deps = [":span"])
 library(name = "sparse_matrix")
 library(name = "bits", hdrs = ["murmur3.h", "bits_util.h"], deps = [":numeric"])
