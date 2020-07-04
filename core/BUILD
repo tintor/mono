@@ -19,6 +19,11 @@ cc_library(
     deps = ["@absl//absl/types:span"],
 )
 
+library(
+    name = "algorithm",
+    deps = [":span"],
+)
+
 cc_library(
     name = "vector",
     hdrs = ["vector.h"],
