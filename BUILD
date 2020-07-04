@@ -10,3 +10,13 @@ cc_library(
     name = "catch",
     hdrs = ["catch.hpp"],
 )
+
+cc_library(
+    name = "lodepng",
+    hdrs = ["lodepng/lodepng.h"],
+    srcs = ["lodepng/lodepng.cc"],
+)
+
+cc_library(
+    name = "freetype",
+)
