@@ -1,29 +1,20 @@
 package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
-# TODO add font
-
-cc_library(
-    name = "vertex_buffer",
-    hdrs = ["vertex_buffer.h"],
-)
-
 cc_library(
     name = "color",
     hdrs = ["color.h"],
 )
 
 cc_library(
-    name = "rendering",
-    hdrs = ["rendering.h"],
-    srcs = ["rendering.cc"],
-    deps = [":opengl", "//:lodepng", "//core:range", "@fmt"],
-)
-
-cc_library(
     name = "glm",
     hdrs = ["glm.h"],
     deps = ["@fmt"],
+)
+
+cc_library(
+    name = "opengl",
+    hdrs = ["opengl.h"],
 )
 
 cc_library(
@@ -34,8 +25,22 @@ cc_library(
 )
 
 cc_library(
-    name = "opengl",
-    hdrs = ["opengl.h"],
+    name = "font",
+    hdrs = ["font.h"],
+    deps = [":color", ":shader"],
+    # TODO add font.cc
+)
+
+cc_library(
+    name = "vertex_buffer",
+    hdrs = ["vertex_buffer.h"],
+)
+
+cc_library(
+    name = "rendering",
+    hdrs = ["rendering.h"],
+    srcs = ["rendering.cc"],
+    deps = [":opengl", "//:lodepng", "//core:range", "@fmt"],
 )
 
 cc_library(

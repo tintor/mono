@@ -1,7 +1,10 @@
 #pragma once
-#include <core/std.h>
-#include <view/color.h>
-#include <view/shader.h>
+#include <array>
+#include <string_view>
+
+#include "core/numeric.h"
+#include "view/color.h"
+#include "view/shader.h"
 
 // TODO: ANTI-ALIAS: Valve's signed distance fields:
 //       - https://steamcdn-a.akamaihd.net/apps/valve/2007/SIGGRAPH2007_AlphaTestedMagnification.pdf
@@ -28,9 +31,9 @@ struct FontRenderer {
 
 class Font {
    public:
-    Font(string_view name, int resolution, FontRenderer* renderer);
+    Font(std::string_view name, int resolution, FontRenderer* renderer);
     ~Font();
-    void render(string_view text, double scale, Color color);
+    void render(std::string_view text, double scale, Color color);
 
     // range for (x, y) is always (800, 600)
     void moveTo(double x, double y) {
@@ -39,7 +42,7 @@ class Font {
         m_y = y;
     }
 
-    void render(string_view text, double x, double y, double scale, Color color) {
+    void render(std::string_view text, double x, double y, double scale, Color color) {
         moveTo(x, y);
         render(text, scale, color);
     }
@@ -47,7 +50,7 @@ class Font {
     double m_scale;
     Color m_color;
 
-    void render(string_view text) { render(text, m_scale, m_color); }
+    void render(std::string_view text) { render(text, m_scale, m_color); }
 
    private:
     FontRenderer* m_renderer = nullptr;
@@ -70,5 +73,5 @@ class Font {
         int advance;               // Horizontal offset to advance to next glyph
     };
 
-    array<Character, 128> m_characters;
+    std::array<Character, 128> m_characters;
 };

@@ -1,8 +1,6 @@
 #pragma once
-
-#include <core/std.h>
-#include <view/glm.h>
-#include <view/opengl.h>
+#include "view/glm.h"
+#include "view/opengl.h"
 
 class VertexBuffer_double2 {
    public:
@@ -41,7 +39,7 @@ class VertexBuffer_vec2_rgba {
         uint64_t color;
     };
 
-    vector<Vertex> data;
+    std::vector<Vertex> data;
 
     VertexBuffer_vec2_rgba(uint count) {
         data.reserve(count);
@@ -84,7 +82,7 @@ class VertexBuffer_vec2 {
         vec2 pos;
     };
 
-    vector<Vertex> data;
+    std::vector<Vertex> data;
 
     VertexBuffer_vec2(uint count) {
         glGenVertexArrays(1, &m_vao);
