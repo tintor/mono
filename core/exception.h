@@ -1,6 +1,7 @@
 #pragma once
 #include <exception>
 
+#include "core/string.h"
 #include "core/callstack.h"
 #include "fmt/core.h"
 
@@ -30,7 +31,7 @@ class exception : public std::exception {
 
     virtual const char* what() const noexcept {
         if (_str.size() == 0) {
-            auto class_name = Callstack::demangle(typeid(*this).name());
+            auto class_name = Demangle(typeid(*this).name());
             _str += class_name.get();
             if (_what.size() > 0) format_s(_str, " %s", _what);
             if (_what_view.size() > 0) format_s(_str, " %s", _what_view);

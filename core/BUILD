@@ -29,7 +29,7 @@ cc_library(name = "vector", hdrs = ["vector.h"], deps = ["@boost//:container"])
 
 library(name = "string", srcs = ["string.cc"], deps = [":span", ":algorithm", ":numeric"])
 library(name = "callstack", srcs = ["callstack.cc"], deps = [":numeric", ":string", ":auto"])
-cc_library(name = "exception", hdrs = ["exception.h"], deps = [":callstack", "@fmt"])
+cc_library(name = "exception", hdrs = ["exception.h"], deps = [":callstack", ":string", "@fmt"])
 
 library(name = "dim4", deps = [":numeric", ":span", ":check", "@fmt"])
 library(name = "tensor", deps = [":dim4"])
@@ -48,6 +48,8 @@ cc_library(name = "align_alloc", hdrs = ["align_alloc.h"])
 library(name = "thread", deps = [":numeric"])
 library(name = "range", deps = [":span", "@fmt"])
 library(name = "array_deque", deps = [":numeric"])
+cc_library(name = "each", hdrs = ["each.h"])
+cc_library(name = "small_bfs", hdrs = ["small_bfs.h"], deps = [":each", ":numeric"])
 
 library(
     name = "diff",
