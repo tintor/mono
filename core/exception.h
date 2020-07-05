@@ -26,17 +26,17 @@ class exception : public std::exception {
 
     template <typename T, typename... Args>
     exception(ThrowLoc loc, std::string_view fmt, T arg, Args... args) : _loc(loc) {
-        format_s(_what, fmt, arg, args...);
+        _what += fmt::format(fmt, arg, args...);
     }
 
     virtual const char* what() const noexcept {
         if (_str.size() == 0) {
             auto class_name = Demangle(typeid(*this).name());
-            _str += class_name.get();
-            if (_what.size() > 0) format_s(_str, " %s", _what);
-            if (_what_view.size() > 0) format_s(_str, " %s", _what_view);
-            format_s(_str, "\n%s\n%s:%s\n", _loc.pretty, _loc.file, _loc.line);
-            std::string cn = format("%s::%s<int>(", class_name.get(), class_name.get());
+            _str += class_name;
+            if (_what.size() > 0) _str += fmt::format(" {}", _what);
+            if (_what_view.size() > 0) _str += fmt::format(" {}", _what_view);
+            _str += fmt::format("\n{}\n{}:{}\n", _loc.pretty, _loc.file, _loc.line);
+            std::string cn = fmt::format("{}::{}<int>(", class_name, class_name);
             _callstack.write(_str, {"exception::exception<int>(", cn});
         }
         return _str.c_str();

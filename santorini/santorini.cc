@@ -24,15 +24,6 @@
 
 using namespace std;
 
-// TODO move to this core somewhere
-namespace std {
-template<typename T>
-ostream& operator<<(ostream& os, const optional<T>& a) {
-    if (a.has_value()) return os << a.value();
-    return os << "null";
-}
-}
-
 // Board and judge
 // ===============
 

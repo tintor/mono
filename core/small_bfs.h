@@ -1,5 +1,6 @@
 #pragma once
-#include <cstring>
+#include <vector>
+#include <optional>
 
 #include "core/each.h"
 #include "core/numeric.h"
@@ -17,7 +18,7 @@ class small_queue {
     uint tail() const { return _tail; }
 
    private:
-    vector<T> _data;
+    std::vector<T> _data;
     uint _head = 0;
     uint _tail = 0;
 };
@@ -25,7 +26,7 @@ class small_queue {
 template <typename T>
 struct small_bfs : public each<small_bfs<T>> {
     small_queue<T> queue;
-    vector<uchar> visited;  // avoid slower vector<bool> as it is bit compressed!
+    std::vector<uchar> visited;  // avoid slower vector<bool> as it is bit compressed!
 
     small_bfs(uint capacity) : queue(capacity) { visited.resize(capacity, 0); }
 
@@ -41,8 +42,8 @@ struct small_bfs : public each<small_bfs<T>> {
         }
     }
 
-    optional<T> next() {
+    std::optional<T> next() {
         if (queue) return queue.pop();
-        return nullopt;
+        return std::nullopt;
     }
 };
