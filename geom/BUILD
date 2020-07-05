@@ -1,4 +1,4 @@
 package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
-library(name = "simd", deps = ["//core:numeric"])
+library(name = "vector", deps = ["//core:numeric", "//core:align_alloc"], test_deps = ["@fmt"])
