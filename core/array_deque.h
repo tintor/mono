@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <algorithm>
 
+// TODO remove
 template<typename T>
 class raw_array {
    public:
@@ -65,6 +66,8 @@ class raw_array {
     T* _data;
 };
 
+namespace detail {
+
 inline unsigned int round_up_power2(unsigned int a) {
     a -= 1;
     a |= a >> 1;
@@ -95,21 +98,105 @@ struct default_growth {
     }
 };
 
+}
+
+// TODO move header and test to a separate git repository (and import it into mono)
 // TODO std::hash
 // TODO use std::allocator
+// TODO finish all missing methods
+// TODO more tests!
 template <typename T,
           typename Allocator = std::allocator<T>,
           typename Size = unsigned int,
-          typename growth = default_growth<Size>>
+          typename growth = detail::default_growth<Size>>
 class array_deque {
    public:
+    // TODO other random access iterator stuff
+    struct iterator {
+        using value_type = T;
+
+        array_deque& deque;
+        T* ptr;
+
+        iterator(array_deque& d, T* p) : deque(d), ptr(p) {}
+
+        T& operator*() { return *ptr; }
+
+        iterator operator--() {
+            if (ptr == deque.data_begin()) ptr = deque.data_end();
+            ptr -= 1;
+            return *this;
+        }
+
+        iterator operator++() {
+            ptr += 1;
+            if (ptr == deque.data_end()) ptr = deque.data_begin();
+            return *this;
+        }
+
+        iterator operator--(int) {
+            auto it = *this;
+            operator--();
+            return it;
+        }
+
+        iterator operator++(int) {
+            auto it = *this;
+            operator++();
+            return it;
+        }
+
+        bool operator==(const iterator& o) const { return ptr == o.ptr; }
+
+        bool operator!=(const iterator& o) const { return ptr != o.ptr; }
+    };
+
+    struct const_iterator {
+        using value_type = T;
+
+        const array_deque& deque;
+        const T* ptr;
+
+        const_iterator(const array_deque& d, const T* p) : deque(d), ptr(p) {}
+
+        const T& operator*() const { return *ptr; }
+
+        const_iterator operator--() {
+            if (ptr == deque.data_begin()) ptr = deque.data_end();
+            ptr -= 1;
+            return *this;
+        }
+
+        const_iterator operator++() {
+            ptr += 1;
+            if (ptr == deque.data_end()) ptr = deque.data_begin();
+            return *this;
+        }
+
+        const_iterator operator--(int) {
+            auto it = *this;
+            operator--();
+            return it;
+        }
+
+        const_iterator operator++(int) {
+            auto it = *this;
+            operator++();
+            return it;
+        }
+
+        bool operator==(const const_iterator& o) const { return ptr == o.ptr; }
+
+        bool operator!=(const const_iterator& o) const { return ptr != o.ptr; }
+    };
+
     using value_type = T;
     using allocator_type = Allocator;
     using size_type = Size;
     using reference = T&;
     using const_reference = const T&;
-    //using pointer =
-    //using const_pointer =
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     array_deque() noexcept(noexcept(Allocator())) {}
 
@@ -185,17 +272,6 @@ class array_deque {
         return *this;
     }
 
-    // TODO private
-    void clear_resize(size_type count) {
-        clear();
-        if (count > capacity()) {
-            m_capacity = growth()(count);
-            m_data.resize_no_copy(m_capacity);
-        }
-        m_start = 0;
-        m_size = count;
-    }
-
     void assign(size_type count, const T& value) {
         clear_resize(count);
         for (size_type i = 0; i < count; i++) new (&m_data[i++]) T(value);
@@ -235,51 +311,6 @@ class array_deque {
 
     constexpr const T& back() const { return m_data[offset(m_size - 1)]; }
 
-    // TODO operator--
-    struct iterator {
-        array_deque& deque;
-        T* ptr;
-
-        iterator(array_deque& d, T* p) : deque(d), ptr(p) {}
-
-        T& operator*() { return *ptr; }
-        iterator operator++() {
-            ptr += 1;
-            if (ptr == deque.data_end()) ptr = deque.data_begin();
-            return *this;
-        }
-        iterator operator++(int) {
-            auto it = *this;
-            ptr += 1;
-            if (ptr == deque.data_end()) ptr = deque.data_begin();
-            return it;
-        }
-        bool operator==(const iterator& o) const { return ptr == o.ptr; }
-        bool operator!=(const iterator& o) const { return ptr != o.ptr; }
-    };
-
-    struct const_iterator {
-        const array_deque& deque;
-        const T* ptr;
-
-        const_iterator(const array_deque& d, const T* p) : deque(d), ptr(p) {}
-
-        const T& operator*() const { return *ptr; }
-        const_iterator operator++() {
-            ptr += 1;
-            if (ptr == deque.data_end()) ptr = deque.data_begin();
-            return *this;
-        }
-        const_iterator operator++(int) {
-            auto it = *this;
-            ptr += 1;
-            if (ptr == deque.data_end()) ptr = deque.data_begin();
-            return it;
-        }
-        bool operator==(const const_iterator& o) const { return ptr == o.ptr; }
-        bool operator!=(const const_iterator& o) const { return ptr != o.ptr; }
-    };
-
     constexpr iterator begin() noexcept { return iterator(*this, &m_data[m_start]); }
 
     constexpr iterator end() noexcept { return iterator(*this, &m_data[offset(m_size)]); }
@@ -292,8 +323,12 @@ class array_deque {
 
     constexpr const_iterator cend() const noexcept { return const_iterator(*this, &m_data[offset(m_size)]); }
 
-    // TODO reverse_iterator
-    // TODO const_reverse_iterator
+    constexpr reverse_iterator rbegin() noexcept { return begin(); }
+
+    constexpr reverse_iterator rend() noexcept { return end(); }
+
+    // TODO reverse_iterator ->  std::reverse_iterator<iterator>
+    // TODO const_reverse_iterator -> std::reverse_iterator<const_iterator>
 
     [[nodiscard]] constexpr bool empty() const noexcept { return m_size == 0; }
 
@@ -438,7 +473,10 @@ class array_deque {
         std::swap(m_size, o.m_size);
     }
 
+    // TODO std::equal
     constexpr bool operator==(const array_deque& o) const {
+        // return m_size == o.size() && std::equal(cbegin(), cend(), o.cbegin());
+
         if (m_size != o.size()) return false;
         for (size_type i = 0; i < m_size; i++) if (!(operator[](i) == o.operator[](i))) return false;
         return true;
@@ -446,13 +484,17 @@ class array_deque {
 
     constexpr bool operator!=(const array_deque& o) const { return !operator==(o); }
 
-    constexpr bool operator<(const array_deque& o) const;
+    constexpr bool operator<(const array_deque& o) const {
+        return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), std::less<T>());
+    }
 
-    constexpr bool operator<=(const array_deque& o) const;
+    constexpr bool operator<=(const array_deque& o) const { return !operator>(o); }
 
-    constexpr bool operator>(const array_deque& o) const;
+    constexpr bool operator>(const array_deque& o) const {
+        return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), std::greater<T>());
+    }
 
-    constexpr bool operator>=(const array_deque& o) const;
+    constexpr bool operator>=(const array_deque& o) const { return !operator<(o); }
 
    private:
     const T* data_begin() const { return m_data.data(); }
@@ -470,6 +512,16 @@ class array_deque {
         if (m_size == capacity()) reserve(growth()(capacity() + 1));
     }
 
+    void clear_resize(size_type count) {
+        clear();
+        if (count > capacity()) {
+            m_capacity = growth()(count);
+            m_data.resize_no_copy(m_capacity);
+        }
+        m_start = 0;
+        m_size = count;
+    }
+
    private:
     raw_array<T> m_data;
     Size m_capacity = 0;
@@ -482,6 +534,58 @@ template<class InputIt, class Alloc = std::allocator<typename std::iterator_trai
 array_deque(InputIt, InputIt, Alloc = Alloc()) -> array_deque<typename std::iterator_traits<InputIt>::value_type, Alloc>;
 
 namespace std {
+
+template<typename ... Args>
+struct front_insert_iterator<array_deque<Args...>> {
+    using Container = array_deque<Args...>;
+
+    constexpr front_insert_iterator() noexcept : m_c(nullptr) { }
+
+    explicit constexpr front_insert_iterator(Container& c) : m_c(&c) {}
+
+    constexpr front_insert_iterator<Container>& operator=(const typename Container::value_type& value) {
+        if (m_c) m_c->push_front(value);
+    }
+
+    constexpr front_insert_iterator<Container>& operator=(typename Container::value_type&& value) {
+        if (m_c) m_c->push_front(value);
+    }
+
+    constexpr front_insert_iterator& operator*() { return *this; }
+
+    constexpr front_insert_iterator& operator++() { return *this; }
+
+    constexpr front_insert_iterator& operator++(int) { return *this; }
+
+private:
+    Container* m_c;
+};
+
+template<typename ... Args>
+struct back_insert_iterator<array_deque<Args...>> {
+    using Container = array_deque<Args...>;
+
+    constexpr back_insert_iterator() noexcept : m_c(nullptr) { }
+
+    explicit constexpr back_insert_iterator(Container& c) : m_c(&c) {}
+
+    constexpr back_insert_iterator<Container>& operator=(const typename Container::value_type& value) {
+        if (m_c) m_c->push_back(value);
+    }
+
+    constexpr back_insert_iterator<Container>& operator=(typename Container::value_type&& value) {
+        if (m_c) m_c->push_back(value);
+    }
+
+    constexpr back_insert_iterator& operator*() { return *this; }
+
+    constexpr back_insert_iterator& operator++() { return *this; }
+
+    constexpr back_insert_iterator& operator++(int) { return *this; }
+
+private:
+    Container* m_c;
+};
 
 template <class T, class Alloc>
 constexpr void swap(array_deque<T, Alloc>& a, array_deque<T, Alloc>& b) noexcept(noexcept(a.swap(b))) {
@@ -503,5 +607,10 @@ constexpr typename array_deque<T, Alloc>::size_type erase_if(array_deque<T, Allo
     c.erase(it, c.end());
     return r;
 }
+
+/*template <typename ArrayDeque>
+struct iterator_traits<typename ArrayDeque::iterator> {
+    using value_type ArrayDeque::value_type;
+};*/
 
 }
