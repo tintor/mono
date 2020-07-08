@@ -1,8 +1,9 @@
+#include "core/array_deque.h"
+
 #include <vector>
 
 #include "fmt/core.h"
 #include "core/numeric.h"
-#include "core/array_deque.h"
 #define CATCH_CONFIG_MAIN
 #include "catch.hpp"
 
@@ -16,7 +17,10 @@ TEST_CASE("array_deque basic", "[array_deque]") {
     }
     REQUIRE(deque.capacity() == 128);
 
-    FOR(i, 40) REQUIRE(i == deque.pop_front());
+    FOR(i, 40) {
+        REQUIRE(i == deque.front());
+        deque.pop_front();
+    }
 
     REQUIRE(deque.size() == 60);
     REQUIRE(deque.capacity() == 128);
@@ -148,7 +152,7 @@ TEST_CASE("array_deque::begin() end()", "[array_deque]") {
     REQUIRE(it == q.end());
 }
 
-TEST_CASE("array_deque::begin() end() const", "[array_deque]") {
+TEST_CASE("array_deque::cbegin() cend()", "[array_deque]") {
     array_deque<Payload> q;
     q.push_back(4);
     q.push_back(5);
@@ -158,14 +162,14 @@ TEST_CASE("array_deque::begin() end() const", "[array_deque]") {
     q.push_back(7);
 
     const auto& cq = q;
-    auto it = cq.begin();
-    REQUIRE(it != cq.end());
+    auto it = cq.cbegin();
+    REQUIRE(it != cq.cend());
     REQUIRE(*it == 5);
     it++;
-    REQUIRE(it != cq.end());
+    REQUIRE(it != cq.cend());
     REQUIRE(*it == 7);
     it++;
-    REQUIRE(it == cq.end());
+    REQUIRE(it == cq.cend());
 }
 
 TEST_CASE("array_deque::reserve(uint)", "[array_deque]") {
