@@ -325,7 +325,8 @@ class PairVisitor : public each<PairVisitor> {
 
     std::optional<std::pair<uint, uint>> next() {
         if (deque.empty()) return std::nullopt;
-        return deque.pop_front();
+        ON_SCOPE_EXIT(deque.pop_front());
+        return deque.front();
     }
 
    private:

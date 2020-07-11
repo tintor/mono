@@ -153,9 +153,9 @@ class StateQueue {
             *top_ptr = min_queue;
             return queue[min_queue][0];
         }
-        State s = queue[min_queue].pop_front();
+        State s = queue[min_queue].front();
+        queue[min_queue].pop_front();
         queue_size -= 1;
-
         return s;
     }
 
