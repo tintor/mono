@@ -1,6 +1,9 @@
+build --repo_env=CC=clang
+build:opt --repo_env=CC=clang
+
 build --copt -Werror
 
-build --cxxopt=-std=c++17
+build --cxxopt=-std=c++2a
 build --cxxopt=-Wfatal-errors
 build --cxxopt=-g
 
