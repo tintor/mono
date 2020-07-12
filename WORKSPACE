@@ -32,6 +32,12 @@ new_git_repository(
     shallow_since = "1589040800 -0700",
 )
 
+http_archive(
+    name = "glm",
+    urls = ["https://github.com/g-truc/glm/archive/0.9.9.8.tar.gz"],
+    build_file = "@//:glm.BUILD"
+)
+
 # BOOST
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
