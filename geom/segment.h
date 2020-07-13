@@ -2,12 +2,17 @@
 #include <cassert>
 
 #include "geom/vector.h"
+#include "geom/aabb.h"
 
-constexpr double Tolerance = 0.5e-6;
+// All Sign() functions return:
+// +1 above / positive side
+//  0 contact / between
+// -1 below / negative side
 
-template <typename Vec>
-bool Equals(Vec a, Vec b) {
-    return squared(a - b) <= squared(Tolerance);
+inline constexpr int Sign(double d, double eps = Tolerance) {
+    if (d > eps) return 1;
+    if (d < -eps) return -1;
+    return 0;
 }
 
 // finite part of line between two points
@@ -39,10 +44,18 @@ struct segment {
         if (t >= dot(d, d)) return b;
         return a + d * (t / dot(d, d));
     }
+
+    operator aabb<Vec>() const { return aabb<Vec>{a, b}; }
 };
 
 using segment2 = segment<double2>;
 using segment3 = segment<double3>;
+
+inline double signed_double_edge_area(double2 a, double2 b) { return (a.x + b.x) * (a.y - b.y); }
+inline double signed_double_area(double2 a, double2 b, double2 c) {
+    return signed_double_edge_area(a, b) + signed_double_edge_area(b, c) + signed_double_edge_area(c, a);
+}
+inline int Sign(segment2 s, double2 v) { return Sign(signed_double_area(s.a, s.b, v) / length(s.a - s.b)); }
 
 // starts from a, and goes to infinity
 template <typename Vec>
@@ -67,6 +80,8 @@ struct ray {
 
 using ray2 = ray<double2>;
 using ray3 = ray<double3>;
+
+inline int Sign(ray2 s, double2 v) { return Sign(signed_double_area(s.origin, s.origin + s.unit_dir, v)); }
 
 // TODO raw_line3: which just stores points A and B (no normalization)
 
@@ -142,12 +157,6 @@ hash operator<<(hash h, segment<Vec> s) {
 
 inline auto angle(segment3 p, segment3 q) { return angle(p.b - p.a, q.b - q.a); }
 
-inline double signed_double_edge_area(double2 a, double2 b) { return (a.x + b.x) * (a.y - b.y); }
-
-inline double signed_double_area(double2 a, double2 b, double2 c) {
-    return signed_double_edge_area(a, b) + signed_double_edge_area(b, c) + signed_double_edge_area(c, a);
-}
-
 inline bool Colinear(line3 s, double3 v) {
     auto va = v - s.origin;
     return squared(va - s.unit_dir * dot(va, s.unit_dir)) <= squared(Tolerance);
@@ -157,6 +166,8 @@ bool relate_abxo(segment2 p, segment2 q);
 bool relate_abxo(segment2 p, segment2 q, double inv_p_len);
 
 char relate(segment2 p, segment2 q, double2* pt = nullptr, double2* qt = nullptr);
+
+bool relate_non_parallel(segment2 p, segment2 q, double2* common);
 
 constexpr int COLINEAR = 1;
 constexpr int VERTEX_VERTEX = 2;

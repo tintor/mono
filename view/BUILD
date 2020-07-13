@@ -9,7 +9,7 @@ cc_library(
 cc_library(
     name = "glm",
     hdrs = ["glm.h"],
-    deps = ["@fmt"],
+    deps = ["@fmt", "@glm"],
 )
 
 cc_library(

@@ -1,7 +1,6 @@
-#include <core/exception.h>
-#include <geom/aabb.h>
-#include <geom/classify.h>
-#include <geom/segment.h>
+#include "core/exception.h"
+#include "geom/aabb.h"
+#include "geom/segment.h"
 
 // D - disjoint
 // O - overlap
@@ -105,6 +104,44 @@ int relate_full(segment2 p, segment2 q, double* pt, double* qt) {
             if (sab < 0 && sq == 0)
                     return EDGE_VERTEX | QB;
             return 0; // disjoint*/
+}
+
+// returns a single common point
+bool relate_non_parallel(segment2 p, segment2 q, double2* common) {
+    int sp = Sign(p, q.a);
+    int sq = Sign(p, q.b);
+    if (sp == 0 && sq == 0) return false; // parallel
+
+    if (Equals(p.a, q.a) || Equals(p.a, q.b)) {
+        if (common) *common = p.a;
+        return true;
+    }
+    if (Equals(p.b, q.a) || Equals(p.b, q.b)) {
+        if (common) *common = p.b;
+        return true;
+    }
+
+    int sa = Sign(q, p.a);
+    int sb = Sign(q, p.b);
+    int sab = sa * sb;
+    int spq = sp * sq;
+    if (sab < 0 && spq < 0) {
+        if (common) {
+            double2 R = p.a - q.a, Q = q.b - q.a, P = p.b - p.a;
+            double d = cross(Q, P);
+            *common = p.linear(cross(R, Q) / d);
+        }
+        return true;
+    }
+    if (sab == 0 && spq < 0) {
+        if (common) *common = (sa == 0) ? p.a : p.b;
+        return true;
+    }
+    if (sab < 0 && spq == 0) {
+        if (common) *common = (sp == 0) ? q.a : q.b;
+        return true;
+    }
+    return false;
 }
 
 // TODO(marko) test that result will be stable if params are swapped (or if segments are reversed)
@@ -221,7 +258,7 @@ bool relate(segment2 p, ray2 q) {
     return 'D';
 }
 
-pair<segment3, NearestCase> nearest(segment3 p, segment3 q) {
+std::pair<segment3, NearestCase> nearest(segment3 p, segment3 q) {
     double3 A = p.b - p.a, B = q.b - q.a, C = p.a - q.a;
     double aa = dot(A, A), bb = dot(B, B), ab = dot(A, B), ac = dot(A, C), bc = dot(B, C);
     constexpr double tiny = 1e-8;
@@ -233,7 +270,7 @@ pair<segment3, NearestCase> nearest(segment3 p, segment3 q) {
     // Note: [d >= tiny * aa * bb] is needed to make parallelness test indepent of line lengths
     if ((d >= tiny && d >= tiny * aa * bb && 0 <= s && s <= d && 0 <= t && t <= d) ||
         (d <= -tiny && d <= -tiny * aa * bb && d <= s && s <= 0 && d <= t && t <= 0))
-        return pair<segment3, NearestCase>(segment3(p.a + A * (s / d), q.a + B * (t / d)), NearestCase::RayRay);
+        return {segment3(p.a + A * (s / d), q.a + B * (t / d)), NearestCase::RayRay};
 
     // ray/endpoint
     double s0 = (aa >= tiny) ? -ac / aa : -1;
@@ -254,14 +291,14 @@ pair<segment3, NearestCase> nearest(segment3 p, segment3 q) {
 
     double dm = std::min(min(d1, d2, d3, d4), min(d5, d6, d7, d8));
 
-    if (d1 == dm) return pair(segment3(p.a + A * s0, q.a), NearestCase::RayPoint);
-    if (d2 == dm) return pair(segment3(p.a + A * s1, q.b), NearestCase::RayPoint);
-    if (d3 == dm) return pair(segment3(p.a, q.a + B * t0), NearestCase::RayPoint);
-    if (d4 == dm) return pair(segment3(p.b, q.a + B * t1), NearestCase::RayPoint);
-    if (d5 == dm) return pair(segment3(p.a, q.a), NearestCase::PointPoint);
-    if (d6 == dm) return pair(segment3(p.b, q.a), NearestCase::PointPoint);
-    if (d7 == dm) return pair(segment3(p.a, q.b), NearestCase::PointPoint);
-    if (d8 == dm) return pair(segment3(p.b, q.b), NearestCase::PointPoint);
+    if (d1 == dm) return {segment3(p.a + A * s0, q.a), NearestCase::RayPoint};
+    if (d2 == dm) return {segment3(p.a + A * s1, q.b), NearestCase::RayPoint};
+    if (d3 == dm) return {segment3(p.a, q.a + B * t0), NearestCase::RayPoint};
+    if (d4 == dm) return {segment3(p.b, q.a + B * t1), NearestCase::RayPoint};
+    if (d5 == dm) return {segment3(p.a, q.a), NearestCase::PointPoint};
+    if (d6 == dm) return {segment3(p.b, q.a), NearestCase::PointPoint};
+    if (d7 == dm) return {segment3(p.a, q.b), NearestCase::PointPoint};
+    if (d8 == dm) return {segment3(p.b, q.b), NearestCase::PointPoint};
 
     THROW(runtime_error, "unreachable");
 }

@@ -434,3 +434,11 @@ inline double3 solve_linear_row(double3 a, double3 b, double3 c, double3 w) {
     double3 z = {a.z, b.z, c.z};
     return solve_linear_col(x, y, z, w);
 }
+
+constexpr double Tolerance = 0.5e-6;
+
+// TODO Two different equals for vectors?
+template <typename T, int N>
+bool Equals(vec<T, N> a, vec<T, N> b) {
+    return squared(a - b) <= squared(Tolerance);
+}
