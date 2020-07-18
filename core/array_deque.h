@@ -200,32 +200,36 @@ class array_deque {
 
     array_deque() noexcept(noexcept(Allocator())) {}
 
-    explicit array_deque(const Allocator& alloc) noexcept {}
+    explicit array_deque(const Allocator& alloc) noexcept : m_alloc(alloc) {}
 
-    explicit array_deque(size_type size) : m_data(size), m_capacity(size), m_size(size) {
-        for (size_type i = 0; i < m_size; i++) new (&m_data[i]) T();
+    explicit array_deque(size_type size)
+            : m_alloc(), m_data(m_alloc.allocate(size)), m_capacity(size), m_size(size) {
+        std::uninitialized_default_construct(m_data, m_data + m_size);
     }
 
-    array_deque(size_type size, const T& init, const Allocator& alloc = Allocator()) : m_data(size), m_capacity(size), m_size(size) {
-        for (size_type i = 0; i < m_size; i++) new (&m_data[i]) T(init);
+    array_deque(size_type size, const T& init, const Allocator& alloc = Allocator())
+            : m_alloc(alloc), m_data(m_alloc.allocate(size)), m_capacity(size), m_size(size) {
+        std::uninitialized_fill(m_data, m_data + m_size, init);
     }
 
-    // TODO test
     template <class InputIt>
-    array_deque(InputIt first, InputIt last, const Allocator& alloc = Allocator()) : m_data(std::distance(first, last)), m_capacity(std::distance(first, last)), m_size(std::distance(first, last)) {
-        size_type i = 0;
-        while (first != last) new (&m_data[i++]) T(*first++);
+    array_deque(InputIt first, InputIt last, const Allocator& alloc = Allocator())
+            : m_alloc(alloc), m_data(m_alloc.allocate(std::distance(first, last))), m_capacity(std::distance(first, last)), m_size(std::distance(first, last)) {
+        std::uninitialized_copy(first, last, m_data);
     }
 
-    array_deque(const array_deque& o) : m_data(o.size()), m_capacity(o.size()), m_size(o.size()) {
-        for (size_type i = 0; i < m_size; i++) new (&m_data[i]) T(o[i]);
+    array_deque(const array_deque& o)
+            : m_data(m_alloc.allocate(o.size())), m_capacity(o.size()), m_size(o.size()) {
+        std::uninitialized_copy(o.begin(), o.end(), m_data);
     }
 
-    array_deque(const array_deque& o, const Allocator& alloc) : m_data(o.size()), m_capacity(o.size()), m_size(o.size()) {
-        for (size_type i = 0; i < m_size; i++) new (&m_data[i]) T(o[i]);
+    array_deque(const array_deque& o, const Allocator& alloc)
+            : m_alloc(alloc), m_data(m_alloc.allocate(o.size())), m_capacity(o.size()), m_size(o.size()) {
+        std::uninitialized_copy(o.begin(), o.end(), m_data);
     }
 
-    array_deque(array_deque&& o) noexcept : m_data(std::move(o.m_data)), m_capacity(o.m_capacity), m_start(o.m_start), m_size(o.m_size) {
+    array_deque(array_deque&& o) noexcept
+            : m_data(std::move(o.m_data)), m_capacity(o.m_capacity), m_start(o.m_start), m_size(o.m_size) {
         o.m_capacity = 0;
         o.m_start = 0;
         o.m_size = 0;
@@ -286,7 +290,7 @@ class array_deque {
 
     void assign(std::initializer_list<T> ilist) { operator=(ilist); }
 
-    constexpr allocator_type get_allocator() const noexcept;
+    constexpr allocator_type get_allocator() const noexcept { return m_alloc; }
 
     // TODO test
     constexpr reference at(size_type pos) {
@@ -523,7 +527,8 @@ class array_deque {
     }
 
    private:
-    raw_array<T> m_data;
+    Allocator m_alloc;
+    T* m_data = nullptr;
     Size m_capacity = 0;
     Size m_start = 0;
     Size m_size = 0;
