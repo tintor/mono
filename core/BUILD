@@ -47,7 +47,7 @@ cc_library(name = "align_alloc", hdrs = ["align_alloc.h"])
 
 library(name = "thread", deps = [":numeric"])
 library(name = "range", deps = [":span", "@fmt"])
-library(name = "array_deque", deps = [":numeric", ":bits_util"], test_deps = [":vector", "@fmt"])
+library(name = "array_deque", deps = [], test_deps = ["@fmt"])
 cc_library(name = "each", hdrs = ["each.h"])
 cc_library(name = "small_bfs", hdrs = ["small_bfs.h"], deps = [":each", ":numeric"])
 cc_library(name = "file", hdrs = ["file.h"], srcs = ["file.cc"], deps = [":each", ":exception"])

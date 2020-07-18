@@ -440,29 +440,21 @@ class array_deque {
         std::swap(m_size, o.m_size);
     }
 
+    constexpr bool operator!=(const array_deque& o) const { return !operator==(o); }
     constexpr bool operator==(const array_deque& o) const {
         return m_size == o.size() && std::equal(cbegin(), cend(), o.cbegin());
     }
 
-    constexpr bool operator!=(const array_deque& o) const { return !operator==(o); }
-
-    constexpr bool operator<(const array_deque& o) const {
-        return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), std::less<T>());
-    }
-
-    constexpr bool operator<=(const array_deque& o) const { return !operator>(o); }
-
-    constexpr bool operator>(const array_deque& o) const {
-        return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), std::greater<T>());
-    }
-
-    constexpr bool operator>=(const array_deque& o) const { return !operator<(o); }
+    constexpr bool operator<(const array_deque& o) const { return lex<std::less<T>>(o); }
+    constexpr bool operator<=(const array_deque& o) const { return lex<std::less_equal<T>>(o); }
+    constexpr bool operator>(const array_deque& o) const { return lex<std::greater<T>>(o); }
+    constexpr bool operator>=(const array_deque& o) const { return lex<std::greater_equal<T>>(o); }
 
    private:
-    const T* data_begin() const { return m_data; }
-    const T* data_end() const { return m_data + capacity(); }
-    T* data_begin() { return m_data; }
-    T* data_end() { return m_data + capacity(); }
+    template<typename Pred>
+    constexpr bool lex(const array_deque& o) const {
+        return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), Pred());
+    }
 
     size_type offset(Size index) const {
         size_type o = m_start + index;
@@ -536,10 +528,12 @@ struct front_insert_iterator<array_deque<Args...>> {
 
     constexpr front_insert_iterator<Container>& operator=(const typename Container::value_type& value) {
         m_c->push_front(value);
+        return *this;
     }
 
     constexpr front_insert_iterator<Container>& operator=(typename Container::value_type&& value) {
         m_c->push_front(value);
+        return *this;
     }
 
     constexpr front_insert_iterator& operator*() { return *this; }
@@ -560,10 +554,12 @@ struct back_insert_iterator<array_deque<Args...>> {
 
     constexpr back_insert_iterator<Container>& operator=(const typename Container::value_type& value) {
         m_c->push_back(value);
+        return *this;
     }
 
     constexpr back_insert_iterator<Container>& operator=(typename Container::value_type&& value) {
         m_c->push_back(value);
+        return *this;
     }
 
     constexpr back_insert_iterator& operator*() { return *this; }

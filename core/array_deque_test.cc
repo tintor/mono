@@ -276,20 +276,31 @@ TEST_CASE("array_deque::shrink_to_fit(uint)", "[array_deque]") {
 }
 
 TEST_CASE("array_deque::operator==(const array_deque&)", "[array_deque]") {
-    array_deque<Payload> q;
+    array_deque<Payload> q{4, 5};
     q.reserve(3);
-    q.push_back(4);
-    q.push_back(5);
     q.pop_front();
 
-    array_deque<Payload> e;
-    e.push_back(5);
+    array_deque<Payload> e{5};
     REQUIRE((e == q));
     REQUIRE((q == e));
 
     e.push_back(5);
     REQUIRE(!(e == q));
     REQUIRE(!(q == e));
+}
+
+TEST_CASE("array_deque::operator!=(const array_deque&)", "[array_deque]") {
+    array_deque<Payload> q{4, 5};
+    q.reserve(3);
+    q.pop_front();
+
+    array_deque<Payload> e{5};
+    REQUIRE(!(e != q));
+    REQUIRE(!(q != e));
+
+    e.push_back(5);
+    REQUIRE((e != q));
+    REQUIRE((q != e));
 }
 
 TEST_CASE("array_deque::begin() end()", "[array_deque]") {
@@ -481,9 +492,45 @@ TEST_CASE("array_deque doubling capacity", "[array_deque]") {
     }
 }
 
-// front_inserter
-// back_inserter
-// < > <= >=
+TEST_CASE("array_deque front_inserter", "[array_deque]") {
+    array_deque<int> a{1, 2};
+    int v[] = {0, -1};
+    std::copy(v, v + 2, std::front_inserter(a));
+    REQUIRE(a == array_deque<int>{-1, 0, 1, 2});
+}
+
+TEST_CASE("array_deque back_inserter", "[array_deque]") {
+    array_deque<int> a{1, 2};
+    int v[] = {3, 4};
+    std::copy(v, v + 2, std::back_inserter(a));
+    REQUIRE(a == array_deque<int>{1, 2, 3, 4});
+}
+
+TEST_CASE("array_deque < and <=", "[array_deque]") {
+    REQUIRE(array_deque<int>{} < array_deque{1});
+    REQUIRE(array_deque<int>{} <= array_deque{1});
+    REQUIRE_FALSE(array_deque{1} < array_deque<int>{});
+    REQUIRE_FALSE(array_deque{1} <= array_deque<int>{});
+
+    REQUIRE(array_deque{1, 2} < array_deque{2});
+    REQUIRE(array_deque{1, 2} <= array_deque{2});
+    REQUIRE_FALSE(array_deque{2} < array_deque{1, 2});
+    REQUIRE_FALSE(array_deque{2} <= array_deque{1, 2});
+
+    REQUIRE(array_deque{1} < array_deque{1, 2});
+    REQUIRE(array_deque{1} <= array_deque{1, 2});
+    REQUIRE_FALSE(array_deque{1, 2} < array_deque{1});
+    REQUIRE(array_deque{1, 2} <= array_deque{1});
+
+    REQUIRE_FALSE(array_deque{1, 2} < array_deque{1, 2});
+    REQUIRE(array_deque{1, 2} <= array_deque{1, 2});
+}
+
+TEST_CASE("array_deque > and >=", "[array_deque]") {
+    REQUIRE(array_deque{3} > array_deque{2, 3});
+    REQUIRE(array_deque{3} >= array_deque{2, 3});
+}
+
 // resize(size_t)
 // resize(size_t, T)
 // emplace_back
