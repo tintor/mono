@@ -877,27 +877,27 @@ TEST_CASE("array_deque::emplace(iterator, ...) back grow", "[array_deque]") {
     REQUIRE(q.back().str == "str");
 }
 
-/*TEST_CASE("array_deque::emplace(iterator, ...) front inplace", "[array_deque]") {
+TEST_CASE("array_deque::emplace(iterator, ...) front inplace", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
     q.reserve(4);
     ops.clear();
     q.emplace(q.begin(), -1, "str");
     REQUIRE(q.capacity() == 4);
+    REQUIRE(ops == "-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{-1, 4, 5, 6});
     REQUIRE(q.front().str == "str");
-    REQUIRE(ops == "-1 P(int, str)\n");
-}*/
+}
 
-/*TEST_CASE("array_deque::emplace(iterator, ...) back middle1", "[array_deque]") {
+TEST_CASE("array_deque::emplace(iterator, ...) back middle1", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6, 7, 8};
     q.reserve(6);
     ops.clear();
     q.emplace(q.begin() + 2, -1, "str");
     REQUIRE(q.capacity() == 6);
+    REQUIRE(ops == "4 P(P&&)\n0 =(P&&)\n0 ~P()\n-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{4, 5, -1, 6, 7, 8});
     REQUIRE(q[2].str == "str");
-    REQUIRE(ops == "4 P(P&&)\n0 =(P&&)\n0 ~P() \n-1 P(int, str)\n");
-}*/
+}
 
 /*TEST_CASE("array_deque::emplace(iterator, ...) back middle2", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6, 7, 8};
@@ -905,19 +905,19 @@ TEST_CASE("array_deque::emplace(iterator, ...) back grow", "[array_deque]") {
     ops.clear();
     q.emplace(q.begin() + 3, -1, "str");
     REQUIRE(q.capacity() == 6);
+    REQUIRE(ops == "8 P(P&&)\n0 =(P&&)\n0 ~P() \n-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{4, 5, 6, -1, 7, 8});
     REQUIRE(q[3].str == "str");
-    REQUIRE(ops == "8 P(P&&)\n0 =(P&&)\n0 ~P() \n-1 P(int, str)\n");
 }*/
 
-/*TEST_CASE("array_deque::emplace(iterator, ...) back inplace", "[array_deque]") {
+TEST_CASE("array_deque::emplace(iterator, ...) back inplace", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
     q.reserve(4);
     ops.clear();
     std::cout << "EMPLACE end" << std::endl;
     q.emplace(q.end(), -1, "str");
     REQUIRE(q.capacity() == 4);
+    REQUIRE(ops == "-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{4, 5, 6, -1});
     REQUIRE(q.back().str == "str");
-    REQUIRE(ops == "-1 P(int, str)\n");
-}*/
+}
