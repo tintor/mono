@@ -673,50 +673,50 @@ TEST_CASE("array_deque::erase(iterator) size:1", "[array_deque]") {
     REQUIRE(q == array_deque<Payload>{});
 }
 
-/*TEST_CASE("array_deque::erase(iterator) front", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator) front", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3};
     ops.clear();
     q.erase(q.begin());
     REQUIRE(q.capacity() == 3);
+    REQUIRE(ops == "1 ~P()\n");
     REQUIRE(q == array_deque<Payload>{2, 3});
-    REQUIRE(ops == "1 =(P&&)\n");
-}*/
+}
 
-/*TEST_CASE("array_deque::erase(iterator) middle", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator) middle", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3};
     ops.clear();
     q.erase(q.begin() + 1);
     REQUIRE(q.capacity() == 3);
-    REQUIRE(q == array_deque<Payload>{1, 3});
     REQUIRE(ops == "2 =(P&&)\n0 ~P()\n");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 3});
+}
 
-/*TEST_CASE("array_deque::erase(iterator) back", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator) back", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3};
     ops.clear();
     q.erase(q.begin() + 2);
     REQUIRE(q.capacity() == 3);
-    REQUIRE(q == array_deque<Payload>{1, 2});
     REQUIRE(ops == "3 ~P()\n");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 2});
+}
 
-/*TEST_CASE("array_deque::erase(iterator, iterator) front empty", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator, iterator) front empty", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
     ops.clear();
     q.erase(q.begin(), q.begin());
     REQUIRE(q.capacity() == 4);
-    REQUIRE(q == array_deque<Payload>{1, 2, 3, 4});
     REQUIRE(ops == "");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 2, 3, 4});
+}
 
-/*TEST_CASE("array_deque::erase(iterator, iterator) front", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator, iterator) front", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
     ops.clear();
     q.erase(q.begin(), q.begin() + 2);
     REQUIRE(q.capacity() == 4);
+    REQUIRE(ops == "1 ~P()\n2 ~P()\n");
     REQUIRE(q == array_deque<Payload>{3, 4});
-    REQUIRE(ops == "1 =(P&&)\n2 =(P&&)\n0 ~P()\n0 ~P()\n");
-}*/
+}
 
 /*TEST_CASE("array_deque::erase(iterator, iterator) middle", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
@@ -727,23 +727,23 @@ TEST_CASE("array_deque::erase(iterator) size:1", "[array_deque]") {
     REQUIRE(ops == "2 =(P&&)\n3 ~P()\n0 ~P()\n");
 }*/
 
-/*TEST_CASE("array_deque::erase(iterator, iterator) back empty", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator, iterator) back empty", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
     ops.clear();
     q.erase(q.end(), q.end());
     REQUIRE(q.capacity() == 4);
-    REQUIRE(q == array_deque<Payload>{1, 2, 3, 4});
     REQUIRE(ops == "");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 2, 3, 4});
+}
 
-/*TEST_CASE("array_deque::erase(iterator, iterator) back", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator, iterator) back", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
     ops.clear();
     q.erase(q.begin() + 2, q.end());
     REQUIRE(q.capacity() == 4);
-    REQUIRE(q == array_deque<Payload>{1, 2});
     REQUIRE(ops == "3 ~P()\n4 ~P()\n");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 2});
+}
 
 /*TEST_CASE("std::erase(array_deque&, value)", "[array_deque]") {
     array_deque<Payload> a{1, 2, 3, 4};
