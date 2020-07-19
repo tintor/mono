@@ -280,7 +280,7 @@ TEST_CASE("array_deque& array_deque::operator=(const array_deque& o) self", "[ar
     REQUIRE(&a[0] == p);
 }
 
-/*TEST_CASE("array_deque& array_deque::operator=(const array_deque& o)", "[array_deque]") {
+TEST_CASE("array_deque& array_deque::operator=(const array_deque& o)", "[array_deque]") {
     array_deque<Payload> a{5, 6, 7, 8};
     a.pop_front();
     a.push_back(9);
@@ -298,7 +298,7 @@ TEST_CASE("array_deque& array_deque::operator=(const array_deque& o) self", "[ar
     REQUIRE(b.capacity() == 4);
     REQUIRE(b.front() == 6);
     REQUIRE(b.back() == 9);
-}*/
+}
 
 // TODO array_deque& operator=(array_deque&& o)
 // TODO array_deque& operator=(std::initializer_list<T> ilist)
@@ -857,25 +857,25 @@ TEST_CASE("array_deque::assign(size_t, const T&) grow", "[array_deque]") {
     REQUIRE(q == array_deque<Payload>{-1, -1});
 }
 
-/*TEST_CASE("array_deque::emplace(iterator, ...) front grow", "[array_deque]") {
+TEST_CASE("array_deque::emplace(iterator, ...) front grow", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
     ops.clear();
     q.emplace(q.begin(), -1, "str");
     REQUIRE(q.capacity() == 4);
+    REQUIRE(ops == "4 P(P&&)\n5 P(P&&)\n6 P(P&&)\n0 ~P()\n0 ~P()\n0 ~P()\n-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{-1, 4, 5, 6});
     REQUIRE(q.front().str == "str");
-    REQUIRE(ops == "4 P(P&&)\n5 P(P&&)\n6 P(P&&)\n0 ~P()\n0 ~P()\n0 ~P()\n-1 P(int, str)\n");
-}*/
+}
 
-/*TEST_CASE("array_deque::emplace(iterator, ...) back grow", "[array_deque]") {
+TEST_CASE("array_deque::emplace(iterator, ...) back grow", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
     ops.clear();
     q.emplace(q.end(), -1, "str");
     REQUIRE(q.capacity() == 4);
+    REQUIRE(ops == "4 P(P&&)\n5 P(P&&)\n6 P(P&&)\n0 ~P()\n0 ~P()\n0 ~P()\n-1 P(int, string)\n");
     REQUIRE(q == array_deque<Payload>{4, 5, 6, -1});
     REQUIRE(q.back().str == "str");
-    REQUIRE(ops == "4 P(P&&)\n5 P(P&&)\n6 P(P&&)\n0 ~P()\n0 ~P()\n0 ~P()\n-1 P(int, str)\n");
-}*/
+}
 
 /*TEST_CASE("array_deque::emplace(iterator, ...) front inplace", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
