@@ -367,7 +367,7 @@ TEST_CASE("array_deque::begin() end()", "[array_deque]") {
     REQUIRE(it == q.end());
 }
 
-/*TEST_CASE("array_deque::rbegin() rend()", "[array_deque]") {
+TEST_CASE("array_deque::rbegin() rend()", "[array_deque]") {
     array_deque<Payload> q;
     q.push_back(4);
     q.push_back(5);
@@ -386,7 +386,28 @@ TEST_CASE("array_deque::begin() end()", "[array_deque]") {
     REQUIRE(*it == 5);
     it++;
     REQUIRE(it == q.rend());
-}*/
+}
+
+TEST_CASE("array_deque::crbegin() crend()", "[array_deque]") {
+    array_deque<Payload> q;
+    q.push_back(4);
+    q.push_back(5);
+    q.pop_front();
+    q.push_back(6);
+    q.pop_back();
+    q.push_back(7);
+    REQUIRE(q.size() == 2);
+    REQUIRE(q.capacity() == 4);
+
+    auto it = q.crbegin();
+    REQUIRE(it != q.crend());
+    REQUIRE(*it == 7);
+    it++;
+    REQUIRE(it != q.crend());
+    REQUIRE(*it == 5);
+    it++;
+    REQUIRE(it == q.crend());
+}
 
 TEST_CASE("array_deque::cbegin() cend()", "[array_deque]") {
     array_deque<Payload> q;

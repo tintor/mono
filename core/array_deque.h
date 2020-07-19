@@ -316,11 +316,11 @@ class array_deque {
     constexpr const_iterator cbegin() const noexcept { return {this, 0}; }
     constexpr const_iterator cend() const noexcept { return {this, m_size}; }
 
-    constexpr reverse_iterator rbegin() noexcept { return end(); }
-    constexpr reverse_iterator rend() noexcept { return begin(); }
+    constexpr reverse_iterator rbegin() noexcept { return reverse_iterator(end()); }
+    constexpr reverse_iterator rend() noexcept { return reverse_iterator(begin()); }
 
-    constexpr const_reverse_iterator crbegin() const noexcept { return end(); }
-    constexpr const_reverse_iterator crend() const noexcept { return begin(); }
+    constexpr const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(end()); }
+    constexpr const_reverse_iterator crend() const noexcept { return const_reverse_iterator(begin()); }
 
     [[nodiscard]] constexpr bool empty() const noexcept { return m_size == 0; }
 
