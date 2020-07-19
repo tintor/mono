@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <iostream>
 
 namespace mt {
 
@@ -323,7 +324,15 @@ class array_deque {
         m_size = 0;
     }
 
-    iterator insert(const_iterator pos, const T& value) { return emplace(pos, value); }
+    iterator insert(const_iterator pos, const T& value) {
+        iterator it(this, pos.index);
+        if (expand(it, 1)) {
+            *it = value;
+        } else {
+            new (m_data + offset(it.index)) T(std::move(value));
+        }
+        return it;
+    }
 
     iterator insert(const_iterator pos, T&& value) {
         iterator it(this, pos.index);
@@ -362,10 +371,19 @@ class array_deque {
 
     template <class... Args>
     iterator emplace(const_iterator pos, Args&&... args) {
+        if (pos.index == 0) {
+            emplace_front(args...);
+            return begin();
+        }
+        if (pos.index == m_size) {
+            emplace_back(args...);
+            return {this, pos.index};
+        }
+
         iterator it(this, pos.index);
-        bool initialized = expand(it, 1);
+        expand(it, 1);
         T* p = m_data + offset(it.index);
-        if (initialized) std::destroy_at(p);
+        std::destroy_at(p);
         new (p) T(args...);
         return it;
     }
@@ -399,13 +417,12 @@ class array_deque {
     }
 
     template<class... Args>
-    reference emplace_front(Args&&... args) {
+    void emplace_front(Args&&... args) {
         ensure_space(1);
         size_type i = ((m_start == 0) ? m_capacity : m_start) - 1;
         new (m_data + i) T(args...);
         m_size += 1;
         m_start = i;
-        return m_data[i];
     }
 
     void pop_front() {
@@ -425,12 +442,11 @@ class array_deque {
     }
 
     template<class... Args>
-    reference emplace_back(Args&&... args) {
+    void emplace_back(Args&&... args) {
         ensure_space(1);
         size_type i = offset(m_size);
         new (m_data + i) T(args...);
         m_size += 1;
-        return m_data[i];
     }
 
     void pop_back() {
@@ -516,31 +532,62 @@ class array_deque {
         std::uninitialized_move(temp.begin(), temp.end(), begin());
     }
 
+    void print(std::string name) {
+        std::cout << name << std::endl;
+        for (int i = 0; i < m_capacity; i++) {
+            bool init1 = (m_start <= i && i < m_start + m_size && m_start + m_size <= m_capacity);
+            bool init2 = (m_start + m_size > m_capacity) && (i < m_start + m_size - m_capacity || i >= m_start);
+            if (init1 || init2) std::cout << m_data[i] << ' '; else std::cout << "# ";
+        }
+        std::cout << std::endl;
+    }
+
     bool expand(iterator pos, size_t count) {
-        if (m_size + count <= m_capacity) {
-            if (pos.index < m_size - pos.index - count) {
-                if (m_start < count) m_start -= count - m_capacity; else m_start -= count;
-                m_size += count;
-
-                std::uninitialized_move(begin() + count, begin() + count + count, begin());
-                std::move(begin() + count + count, begin() + count + pos.index, begin() + count);
-            } else {
-                m_size += count;
-
-                detail::uninitialized_move_backward(end() - count - count, end() - count, end());
-                std::move_backward(pos, end(), end() + count);
-                std::move(begin() + pos.index, end() - count - count, end() - count);
-            }
-            return true;
+        if (m_size + count > m_capacity) {
+            print("expand grow");
+            array_deque<T, Allocator, Size, growth> temp;
+            temp.realloc(growth()(m_size + count));
+            std::uninitialized_move(begin(), pos, temp.begin());
+            std::uninitialized_move(pos, end(), temp.begin() + pos.index + count);
+            temp.m_size = m_size + count;
+            swap(temp);
+            return false;
         }
 
-        array_deque<T, Allocator, Size, growth> temp;
-        temp.realloc(growth()(m_size + count));
-        std::uninitialized_move(begin(), pos, temp.begin());
-        std::uninitialized_move(pos, end(), temp.begin() + pos.index + count);
-        temp.m_size = m_size + count;
-        swap(temp);
-        return false;
+        /*if (pos.index == m_size) {
+            print("expand inline back_simple");
+            m_size += count;
+            return false;
+        }
+        if (pos.index == 0) {
+            print("expand inline front_simple");
+            if (m_start < count) m_start += m_capacity;
+            m_start -= count;
+            m_size += count;
+            return false;
+        }*/
+
+        auto before = pos.index;
+        auto after = m_size - pos.index;
+        if (before < after) {
+            print("expand inline front");
+            if (m_start < count) m_start += m_capacity;
+            m_start -= count;
+            m_size += count;
+
+            std::uninitialized_move(begin() + count, begin() + count + count, begin());
+            print("inline B");
+            std::move(begin() + count + count, begin() + count + pos.index, begin() + count);
+        } else {
+            print("expand inline back");
+            m_size += count;
+
+            detail::uninitialized_move_backward(end() - count - count, end() - count, end());
+            print("inline B");
+            std::move_backward(pos, end() - count, end());
+        }
+        print("end expand");
+        return true;
     }
 
    private:
