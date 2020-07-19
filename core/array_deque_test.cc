@@ -45,8 +45,8 @@ struct Payload {
     Payload(Payload&& o) : a(o.a) { Log(a, "P(P&&)"); o.a = 0; }
     Payload(const Payload& o) : a(o.a) { Log(a, "P(const P&)"); }
     ~Payload() { Log(a, "~P()"); a = -100; }
-    void operator=(Payload&& o) { Log(a, "=(P&&)"); o.a = 0; }
-    void operator=(const Payload& o) { Log(a, "=(const P&)"); }
+    void operator=(Payload&& o) { Log(a, "=(P&&)"); a = o.a; o.a = 0; }
+    void operator=(const Payload& o) { Log(a, "=(const P&)"); a = o.a; }
     bool operator==(int o) const { return a == o; }
     bool operator==(const Payload& o) const { return a == o.a; }
 };
@@ -817,15 +817,15 @@ TEST_CASE("array_deque::assign(std::initialized_list<T>) empty", "[array_deque]"
     REQUIRE(q == array_deque<Payload>{2, 3});
 }*/
 
-/*TEST_CASE("array_deque::assign(std::initialized_list<T>) grow", "[array_deque]") {
+TEST_CASE("array_deque::assign(std::initialized_list<T>) grow", "[array_deque]") {
     array_deque<Payload> q{5};
     std::initializer_list<Payload> e = {2, 3};
     ops.clear();
     q.assign(e);
-    REQUIRE(q.capacity() == 4);
-    REQUIRE(q == array_deque<Payload>{2, 3});
+    REQUIRE(q.capacity() == 2);
     REQUIRE(ops == "5 ~P()\n2 P(const P&)\n3 P(const P&)\n");
-}*/
+    REQUIRE(q == array_deque<Payload>{2, 3});
+}
 
 TEST_CASE("array_deque::assign(size_type, const T&) empty", "[array_deque]") {
     array_deque<Payload> q{5, 6, 7};
@@ -837,15 +837,15 @@ TEST_CASE("array_deque::assign(size_type, const T&) empty", "[array_deque]") {
     REQUIRE(ops == "5 ~P()\n6 ~P()\n7 ~P()\n");
 }
 
-/*TEST_CASE("array_deque::assign(size_type, const T&) inplace", "[array_deque]") {
+TEST_CASE("array_deque::assign(size_type, const T&) inplace", "[array_deque]") {
     array_deque<Payload> q{5, 6, 7};
     const Payload a = -1;
     ops.clear();
     q.assign(2, a);
     REQUIRE(q.capacity() == 3);
+    REQUIRE(ops == "5 =(const P&)\n6 =(const P&)\n7 ~P()\n");
     REQUIRE(q == array_deque<Payload>{-1, -1});
-    REQUIRE(ops == "-1 P(const P&)\n-1 P(const P&)\n7 ~P()\n");
-}*/
+}
 
 /*TEST_CASE("array_deque::assign(size_t, const T&) grow", "[array_deque]") {
     array_deque<Payload> q{5};

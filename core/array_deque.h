@@ -520,10 +520,10 @@ class array_deque {
         return std::lexicographical_compare(cbegin(), cend(), o.cbegin(), o.cend(), Pred());
     }
 
-    size_type offset(Size index) const {
-        size_type o = m_start + index;
-        if (o >= capacity()) o -= capacity();
-        return o;
+    size_type offset(size_type index) const {
+        size_type a = m_start + index;
+        if (a >= capacity()) a -= capacity();
+        return a;
     }
 
     void ensure_space(size_t space) {
