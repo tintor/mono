@@ -244,7 +244,9 @@ class array_deque {
         if (count > m_capacity) {
             // grow
             clear();
-            resize(count, value);
+            realloc(count);
+            std::uninitialized_fill(m_data, m_data + count, value);
+            m_size = count;
             return;
         }
 
