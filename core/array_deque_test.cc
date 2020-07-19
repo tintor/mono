@@ -28,8 +28,7 @@ TEST_CASE("array_deque basic", "[array_deque]") {
     for (int i = 0; i < 130; i++) REQUIRE(deque[i] == 40 + i);
 }
 
-using T = std::string;
-T ops;
+std::string ops;
 
 void Log(int a, std::string_view m) {
     std::ostringstream os;
@@ -45,14 +44,14 @@ struct Payload {
     Payload(int a, std::string s) : a(a), str(s) { Log(a, "P(int, string)"); }
     Payload(Payload&& o) : a(o.a) { Log(a, "P(P&&)"); o.a = 0; }
     Payload(const Payload& o) : a(o.a) { Log(a, "P(const P&)"); }
-    ~Payload() { Log(a, "~P()"); }
+    ~Payload() { Log(a, "~P()"); a = -100; }
     void operator=(Payload&& o) { Log(a, "=(P&&)"); o.a = 0; }
     void operator=(const Payload& o) { Log(a, "=(const P&)"); }
     bool operator==(int o) const { return a == o; }
     bool operator==(const Payload& o) const { return a == o.a; }
 };
 
-std::ostream& operator<<(std::ostream& os, Payload p) {
+std::ostream& operator<<(std::ostream& os, const Payload& p) {
     os << p.a;
     return os;
 }
@@ -777,12 +776,32 @@ TEST_CASE("array_deque::erase(iterator) size:1", "[array_deque]") {
     REQUIRE(a.capacity() == 4);
 }*/
 
+TEST_CASE("array_deque::assign(iterator, iterator) empty", "[array_deque]") {
+    array_deque<Payload> q{5, 6, 7};
+    Payload e[] = {};
+    ops.clear();
+    q.assign(e, e);
+    REQUIRE(q.capacity() == 3);
+    REQUIRE(ops == "5 ~P()\n6 ~P()\n7 ~P()\n");
+    REQUIRE(q == array_deque<Payload>{});
+}
+
+/*TEST_CASE("array_deque::assign(iterator, iterator) inplace", "[array_deque]") {
+    array_deque<Payload> q{5, 6, 7};
+    Payload e[] = {2, 3};
+    ops.clear();
+    q.assign(e, e + 2);
+    REQUIRE(q.capacity() == 3);
+    REQUIRE(ops == "5 =(const P&)\n6 =(const P&)\n7 ~P()\n");
+    REQUIRE(q == array_deque<Payload>{2, 3});
+}*/
 
 // assign(InputIt first, InputIt last) is tested through these 3 cases
 TEST_CASE("array_deque::assign(std::initialized_list<T>) empty", "[array_deque]") {
     array_deque<Payload> q{5, 6, 7};
+    std::initializer_list<Payload> e = {};
     ops.clear();
-    q.assign({});
+    q.assign(e);
     REQUIRE(q.capacity() == 3);
     REQUIRE(q == array_deque<Payload>{});
     REQUIRE(ops == "5 ~P()\n6 ~P()\n7 ~P()\n");
@@ -790,17 +809,19 @@ TEST_CASE("array_deque::assign(std::initialized_list<T>) empty", "[array_deque]"
 
 /*TEST_CASE("array_deque::assign(std::initialized_list<T>) inplace", "[array_deque]") {
     array_deque<Payload> q{5, 6, 7};
+    std::initializer_list<Payload> e = {2, 3};
     ops.clear();
-    q.assign({2, 3});
+    q.assign(e);
     REQUIRE(q.capacity() == 3);
+    REQUIRE(ops == "5 =(const P&)\n6 =(const P&)\n7 ~P()\n");
     REQUIRE(q == array_deque<Payload>{2, 3});
-    REQUIRE(ops == "5 ~P()\n6 ~P()\n7 ~P()\n2 P(const P&)\n3 P(const P&)\n");
 }*/
 
 /*TEST_CASE("array_deque::assign(std::initialized_list<T>) grow", "[array_deque]") {
     array_deque<Payload> q{5};
+    std::initializer_list<Payload> e = {2, 3};
     ops.clear();
-    q.assign({2, 3});
+    q.assign(e);
     REQUIRE(q.capacity() == 4);
     REQUIRE(q == array_deque<Payload>{2, 3});
     REQUIRE(ops == "5 ~P()\n2 P(const P&)\n3 P(const P&)\n");

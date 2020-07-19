@@ -1,6 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <iostream>
+extern std::string ops;
 
 namespace mt {
 
@@ -240,29 +241,45 @@ class array_deque {
     }
 
     void assign(size_type count, const T& value) {
-        if (count <= m_capacity) {
-            // inplace
-            if (count < m_size) {
-                std::fill(begin(), begin() + count, value);
-                std::destroy(begin() + count, end());
-            } else {
-                std::fill(begin(), begin() + m_size, value);
-                std::uninitialized_value_construct(begin() + m_size, begin() + count);
-            }
-            m_size = count;
+        if (count > m_capacity) {
+            // grow
+            clear();
+            resize(count, value);
             return;
         }
-        // grow
-        clear();
-        resize(count, value);
+
+        // inplace
+        if (count < m_size) {
+            std::fill(begin(), begin() + count, value);
+            std::destroy(begin() + count, end());
+        } else {
+            std::fill(begin(), begin() + m_size, value);
+            std::uninitialized_value_construct(begin() + m_size, begin() + count);
+        }
+        m_size = count;
     }
 
     template <class InputIt>
     void assign(InputIt first, InputIt last) {
-        clear();
-        reserve(std::distance(first, last));
-        detail::uninitialized_copy_const(first, last, m_data);
-        m_size = std::distance(first, last); // initialize after construction in case of exception
+        auto count = std::distance(first, last);
+        if (count > m_capacity) {
+            // grow
+            clear();
+            realloc(count);
+            detail::uninitialized_copy_const(first, last, m_data);
+            m_size = count;
+            return;
+        }
+
+        // inplace
+        if (count < m_size) {
+            std::copy(first, last, begin());
+            std::destroy(begin() + count, end());
+        } else {
+            for (int i = 0; i < m_size; i++) begin()[i] = *first++;
+            std::uninitialized_copy(first, last, begin() + m_size);
+        }
+        m_size = count;
     }
 
     void assign(std::initializer_list<T> ilist) { assign(ilist.begin(), ilist.end()); }
