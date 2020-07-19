@@ -1,6 +1,8 @@
 #pragma once
 #include <algorithm>
 
+namespace mt {
+
 namespace detail {
 
 inline unsigned int round_up_power2(unsigned int a) {
@@ -41,6 +43,21 @@ ForwardIt uninitialized_copy_const(InputIt first, InputIt last, ForwardIt d_firs
     return d_first;
 }
 
+template<class InputIt, class ForwardIt>
+ForwardIt uninitialized_move_backward(InputIt first, InputIt last, ForwardIt d_last) {
+    typedef typename std::iterator_traits<ForwardIt>::value_type Value;
+    ForwardIt current = d_last;
+    try {
+        while (first != last) {
+            ::new (static_cast<void*>(std::addressof(*--current))) Value(std::move(*--last));
+        }
+        return current;
+    } catch (...) {
+        while (d_last != current) (--d_last)->~Value();
+        throw;
+    }
+}
+
 template <typename ValueType, typename ArrayDeque>
 struct array_deque_iterator {
     using value_type = ValueType;
@@ -50,15 +67,15 @@ struct array_deque_iterator {
     using iterator_category = std::random_access_iterator_tag;
 
     using iterator = array_deque_iterator;
-    ArrayDeque& deque;
-    size_t index;
+    ArrayDeque* deque = nullptr;
+    size_t index = 0;
 
-    array_deque_iterator(ArrayDeque& d, size_t i) : deque(d), index(i) {}
-    iterator& operator=(const iterator& o) { index = o.index; return *this; }
+    array_deque_iterator(ArrayDeque* d, size_t i) : deque(d), index(i) {}
+    operator array_deque_iterator<const ValueType, const ArrayDeque>() { return {deque, index}; }
 
-    reference operator[](size_t i) const { return deque[index + i]; }
-    reference operator*() const { return deque[index]; }
-    pointer operator->() const { return &deque[index]; }
+    reference operator[](size_t i) const { return (*deque)[index + i]; }
+    reference operator*() const { return (*deque)[index]; }
+    pointer operator->() const { return &(*deque)[index]; }
 
     iterator operator--() { --index; return *this; }
     iterator operator++() { ++index; return *this; }
@@ -88,7 +105,7 @@ array_deque_iterator<V, D> operator+(size_t a, array_deque_iterator<V, D> it) { 
 template <typename V, typename D>
 array_deque_iterator<V, D> operator-(size_t a, array_deque_iterator<V, D> it) { return {it.deque, a - it.index}; }
 
-}
+} // namespace detail
 
 // TODO move header and test to a separate git repository (and import it into mono)
 // TODO exception safety review!
@@ -222,10 +239,21 @@ class array_deque {
     }
 
     void assign(size_type count, const T& value) {
+        if (count <= m_capacity) {
+            // inplace
+            if (count < m_size) {
+                std::fill(begin(), begin() + count, value);
+                std::destroy(begin() + count, end());
+            } else {
+                std::fill(begin(), begin() + m_size, value);
+                std::uninitialized_value_construct(begin() + m_size, begin() + count);
+            }
+            m_size = count;
+            return;
+        }
+        // grow
         clear();
-        reserve(count);
-        std::uninitialized_fill(m_data, m_data + count, value);
-        m_size = count; // initialize after construction in case of exception
+        resize(count, value);
     }
 
     template <class InputIt>
@@ -259,14 +287,14 @@ class array_deque {
     constexpr const T& front() const { return m_data[m_start]; }
     constexpr const T& back() const { return m_data[offset(m_size - 1)]; }
 
-    constexpr iterator begin() noexcept { return iterator(*this, 0); }
-    constexpr iterator end() noexcept { return iterator(*this, m_size); }
+    constexpr iterator begin() noexcept { return {this, 0}; }
+    constexpr iterator end() noexcept { return {this, m_size}; }
 
-    constexpr const_iterator begin() const noexcept { return {*this, 0}; }
-    constexpr const_iterator end() const noexcept { return const_iterator(*this, m_size); }
+    constexpr const_iterator begin() const noexcept { return {this, 0}; }
+    constexpr const_iterator end() const noexcept { return {this, m_size}; }
 
-    constexpr const_iterator cbegin() const noexcept { return {*this, 0}; }
-    constexpr const_iterator cend() const noexcept { return const_iterator(*this, m_size); }
+    constexpr const_iterator cbegin() const noexcept { return {this, 0}; }
+    constexpr const_iterator cend() const noexcept { return {this, m_size}; }
 
     constexpr reverse_iterator rbegin() noexcept { return end(); }
     constexpr reverse_iterator rend() noexcept { return begin(); }
@@ -291,23 +319,24 @@ class array_deque {
     }
 
     void clear() noexcept {
-        while (m_size > 0) pop_back();
+        std::destroy(begin(), end());
+        m_size = 0;
     }
 
     iterator insert(const_iterator pos, const T& value) { return emplace(pos, value); }
 
     iterator insert(const_iterator pos, T&& value) {
-        iterator it(*this, pos.index);
+        iterator it(this, pos.index);
         if (expand(it, 1)) {
-            *it = value;
+            *it = std::move(value);
         } else {
-            new (m_data + it.index) T(value);
+            new (m_data + offset(it.index)) T(std::move(value));
         }
         return it;
     }
 
     iterator insert(const_iterator pos, size_type count, const T& value) {
-        iterator it(*this, pos.index);
+        iterator it(this, pos.index);
         if (expand(it, count)) {
             std::fill(it, it + count, value);
         } else {
@@ -318,7 +347,7 @@ class array_deque {
 
     template <class InputIt>
     iterator insert(const_iterator pos, InputIt first, InputIt last) {
-        iterator it(*this, pos.index);
+        iterator it(this, pos.index);
         if (expand(it, std::distance(first, last))) {
             std::copy(first, last, it);
         } else {
@@ -333,30 +362,30 @@ class array_deque {
 
     template <class... Args>
     iterator emplace(const_iterator pos, Args&&... args) {
-        iterator it(*this, pos.index);
-        if (expand(it, 1)) {
-            T* p = m_data + offset(it.index);
-            std::destroy_at(p);
-            new (p) T(args...);
-        } else {
-            new (m_data + it.index) T(args...);
-        }
+        iterator it(this, pos.index);
+        bool initialized = expand(it, 1);
+        T* p = m_data + offset(it.index);
+        if (initialized) std::destroy_at(p);
+        new (p) T(args...);
         return it;
     }
 
-    iterator erase(const_iterator pos) {
-        iterator it(*this, pos.index);
-        std::move(it + 1, end(), it);
-        std::destroy_at(m_data + offset(m_size - 1));
-        return it;
-    }
+    iterator erase(const_iterator pos) { return erase(pos, pos + 1); }
 
     iterator erase(const_iterator first, const_iterator last) {
-        const auto count = std::distance(first, last);
-        iterator it(*this, first.index);
-        std::move(it + count, end(), it);
-        std::destroy(end() - count, end());
-        return it;
+        const auto count = last.index - first.index;
+        if (first.index < m_size - last.index) {
+            // move front to right
+            std::move_backward(begin(), begin() + first.index, begin() + last.index);
+            std::destroy(begin(), begin() + count);
+            m_start += count;
+        } else {
+            // move back to left
+            std::move(begin() + last.index, end(), begin() + first.index);
+            std::destroy(end() - count, end());
+        }
+        m_size -= count;
+        return {this, first.index};
     }
 
     void push_front(const T& value) { emplace_front(value); }
@@ -382,8 +411,8 @@ class array_deque {
     void pop_front() {
         size_type i = m_start++;
         if (m_start >= capacity()) m_start -= capacity();
-        m_size -= 1; // decrement size before destroying it
         std::destroy_at(m_data + i);
+        m_size -= 1;
     }
 
     void push_back(const T& value) { emplace_back(value); }
@@ -406,28 +435,30 @@ class array_deque {
 
     void pop_back() {
         size_type i = offset(m_size - 1);
-        m_size -= 1; // decrement size before destroying it
         std::destroy_at(m_data + i);
+        m_size -= 1;
     }
 
     void resize(size_type count) {
         if (count > m_size) {
             ensure_space(count - m_size);
-            std::uninitialized_value_construct(end(), end() + count);
+            std::uninitialized_value_construct(end(), end() + count - m_size);
             m_size = count;
             return;
         }
-        while (count < size()) pop_back();
+        std::destroy(end() - count, end());
+        m_size -= count;
     }
 
     void resize(size_type count, const value_type& value) {
         if (count > m_size) {
             ensure_space(count - m_size);
-            std::uninitialized_fill(end(), end() + count, value);
+            std::uninitialized_fill(end(), end() + count - m_size, value);
             m_size = count;
             return;
         }
-        while (count < size()) pop_back();
+        std::destroy(begin() + count, end());
+        m_size = count;
     }
 
     constexpr void swap(array_deque& o)
@@ -471,34 +502,42 @@ class array_deque {
             m_alloc.deallocate(m_data, m_capacity);
             m_data = m_alloc.allocate(new_capacity);
             m_capacity = new_capacity;
+            m_start = 0;
             return;
         }
 
         array_deque<T, Allocator, Size, growth> temp;
         swap(temp);
 
-        m_alloc.deallocate(m_data, m_capacity);
         m_data = m_alloc.allocate(new_capacity);
         m_capacity = new_capacity;
-
-        while (temp.size() > 0) {
-            new (m_data + m_size) T(std::move(temp.front()));
-            m_size += 1;
-            temp.pop_front();
-        }
+        m_start = 0;
+        m_size = temp.size();
+        std::uninitialized_move(temp.begin(), temp.end(), begin());
     }
 
     bool expand(iterator pos, size_t count) {
         if (m_size + count <= m_capacity) {
-            std::move_backward(pos, end(), end() + count);
-            m_size += count;
+            if (pos.index < m_size - pos.index - count) {
+                if (m_start < count) m_start -= count - m_capacity; else m_start -= count;
+                m_size += count;
+
+                std::uninitialized_move(begin() + count, begin() + count + count, begin());
+                std::move(begin() + count + count, begin() + count + pos.index, begin() + count);
+            } else {
+                m_size += count;
+
+                detail::uninitialized_move_backward(end() - count - count, end() - count, end());
+                std::move_backward(pos, end(), end() + count);
+                std::move(begin() + pos.index, end() - count - count, end() - count);
+            }
             return true;
         }
 
         array_deque<T, Allocator, Size, growth> temp;
-        temp.reserve(growth()(capacity() + count));
-        std::move(begin(), pos, temp.begin());
-        std::move(pos, end(), temp.begin() + pos.index + count);
+        temp.realloc(growth()(m_size + count));
+        std::uninitialized_move(begin(), pos, temp.begin());
+        std::uninitialized_move(pos, end(), temp.begin() + pos.index + count);
         temp.m_size = m_size + count;
         swap(temp);
         return false;
@@ -516,11 +555,13 @@ class array_deque {
 template<class InputIt, class Alloc = std::allocator<typename std::iterator_traits<InputIt>::value_type>>
 array_deque(InputIt, InputIt, Alloc = Alloc()) -> array_deque<typename std::iterator_traits<InputIt>::value_type, Alloc>;
 
+} // namespace mt
+
 namespace std {
 
 template<typename ... Args>
-struct front_insert_iterator<array_deque<Args...>> {
-    using Container = array_deque<Args...>;
+struct front_insert_iterator<mt::array_deque<Args...>> {
+    using Container = mt::array_deque<Args...>;
 
     constexpr front_insert_iterator() noexcept : m_c(nullptr) { }
 
@@ -545,8 +586,8 @@ private:
 };
 
 template<typename ... Args>
-struct back_insert_iterator<array_deque<Args...>> {
-    using Container = array_deque<Args...>;
+struct back_insert_iterator<mt::array_deque<Args...>> {
+    using Container = mt::array_deque<Args...>;
 
     constexpr back_insert_iterator() noexcept : m_c(nullptr) { }
 
@@ -570,32 +611,32 @@ private:
     Container* m_c;
 };
 
-template <class T, class Alloc>
-constexpr void swap(array_deque<T, Alloc>& a, array_deque<T, Alloc>& b) noexcept(noexcept(a.swap(b))) {
+template <typename ... Args>
+constexpr void swap(mt::array_deque<Args...>& a, mt::array_deque<Args...>& b) noexcept(noexcept(a.swap(b))) {
     a.swap(b);
 }
 
-template <class T, class Alloc, class U>
-constexpr typename array_deque<T, Alloc>::size_type erase(array_deque<T, Alloc>& c, const U& value) {
+template <class U, typename ... Args>
+constexpr typename mt::array_deque<Args...>::size_type erase(mt::array_deque<Args...>& c, const U& value) {
     auto it = std::remove(c.begin(), c.end(), value);
-    auto r = std::distance(it, c.end());
+    auto r = c.size() - it.index;
     c.erase(it, c.end());
     return r;
 }
 
-template <class T, class Alloc, class Pred>
-constexpr typename array_deque<T, Alloc>::size_type erase_if(array_deque<T, Alloc>& c, const Pred& pred) {
+template <class Pred, typename ... Args>
+constexpr typename mt::array_deque<Args...>::size_type erase_if(mt::array_deque<Args...>& c, const Pred& pred) {
     auto it = std::remove_if(c.begin(), c.end(), pred);
-    auto r = std::distance(it, c.end());
+    auto r = c.size() - it.index;
     c.erase(it, c.end());
     return r;
 }
 
 template<typename ... Args>
-struct hash<array_deque<Args...>> {
-    size_t operator()(const array_deque<Args...>& a) const {
+struct hash<mt::array_deque<Args...>> {
+    size_t operator()(const mt::array_deque<Args...>& a) const {
         size_t s = 0;
-        std::hash<typename array_deque<Args...>::value_type> ehash;
+        std::hash<typename mt::array_deque<Args...>::value_type> ehash;
         for (const auto& e : a) s ^= ehash(e) + 0x9e3779b9 + (s << 6) + (s >> 2);
         return s;
     }
