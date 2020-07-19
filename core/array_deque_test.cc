@@ -718,14 +718,14 @@ TEST_CASE("array_deque::erase(iterator, iterator) front", "[array_deque]") {
     REQUIRE(q == array_deque<Payload>{3, 4});
 }
 
-/*TEST_CASE("array_deque::erase(iterator, iterator) middle", "[array_deque]") {
+TEST_CASE("array_deque::erase(iterator, iterator) middle", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
     ops.clear();
-    q.erase(q.begin() + 1, q.end() - 1);
+    q.erase(q.begin() + 1, q.begin() + 3);
     REQUIRE(q.capacity() == 4);
-    REQUIRE(q == array_deque<Payload>{1, 4});
     REQUIRE(ops == "2 =(P&&)\n3 ~P()\n0 ~P()\n");
-}*/
+    REQUIRE(q == array_deque<Payload>{1, 4});
+}
 
 TEST_CASE("array_deque::erase(iterator, iterator) back empty", "[array_deque]") {
     array_deque<Payload> q{1, 2, 3, 4};
@@ -745,7 +745,7 @@ TEST_CASE("array_deque::erase(iterator, iterator) back", "[array_deque]") {
     REQUIRE(q == array_deque<Payload>{1, 2});
 }
 
-/*TEST_CASE("std::erase(array_deque&, value)", "[array_deque]") {
+TEST_CASE("std::erase(array_deque&, value)", "[array_deque]") {
     array_deque<Payload> a{1, 2, 3, 4};
     a.pop_front();
     a.pop_front();
@@ -759,9 +759,9 @@ TEST_CASE("array_deque::erase(iterator, iterator) back", "[array_deque]") {
 
     REQUIRE(a == array_deque<Payload>{3, 4, 6});
     REQUIRE(a.capacity() == 4);
-}*/
+}
 
-/*TEST_CASE("std::erase_if(array_deque&, predicate)", "[array_deque]") {
+TEST_CASE("std::erase_if(array_deque&, predicate)", "[array_deque]") {
     array_deque<Payload> a{1, 2, 3, 4};
     a.pop_front();
     a.pop_front();
@@ -769,12 +769,12 @@ TEST_CASE("array_deque::erase(iterator, iterator) back", "[array_deque]") {
     a.push_back(6);
 
     ops.clear();
-    std::erase_if(a, [](auto e) {return e.a % 2 == 1; });
-    REQUIRE(ops == "");
+    std::erase_if(a, [](const auto& e) {return e.a % 2 == 1; });
+    REQUIRE(ops == "3 =(P&&)\n0 =(P&&)\n5 ~P()\n0 ~P()\n");
 
     REQUIRE(a == array_deque<Payload>{4, 6});
     REQUIRE(a.capacity() == 4);
-}*/
+}
 
 TEST_CASE("array_deque::assign(iterator, iterator) empty", "[array_deque]") {
     array_deque<Payload> q{5, 6, 7};
