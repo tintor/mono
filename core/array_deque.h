@@ -462,8 +462,8 @@ class array_deque {
             m_size = count;
             return;
         }
-        std::destroy(end() - count, end());
-        m_size -= count;
+        std::destroy(begin() + count, end());
+        m_size = count;
     }
 
     void resize(size_type count, const value_type& value) {
