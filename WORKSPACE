@@ -38,6 +38,13 @@ http_archive(
     build_file = "@//:glm.BUILD"
 )
 
+new_git_repository(
+    name = "glfw",
+    build_file = "@//:glfw.BUILD",
+    remote = "https://github.com/glfw/glfw.git",
+    branch = "3.3-stable",
+)
+
 # BOOST
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 

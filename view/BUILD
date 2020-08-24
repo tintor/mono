@@ -15,6 +15,7 @@ cc_library(
 cc_library(
     name = "opengl",
     hdrs = ["opengl.h"],
+    deps = ["@glfw"],
 )
 
 cc_library(
