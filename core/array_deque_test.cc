@@ -561,6 +561,8 @@ TEST_CASE("array_deque > and >=", "[array_deque]") {
     REQUIRE(array_deque{3} >= array_deque{2, 3});
 }
 
+// RESIZE
+
 TEST_CASE("array_deque::resize(size_t) down", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6, 7};
     q.pop_front();
@@ -625,6 +627,8 @@ TEST_CASE("array_deque::resize(size_t, value) up", "[array_deque]") {
     REQUIRE(q == array_deque<Payload>{5, 6, -1, -1});
 }
 
+// CLEAR
+
 TEST_CASE("array_deque::clear() size:2", "[array_deque]") {
     array_deque<Payload> q{4, 5, 6};
     q.pop_front();
@@ -643,6 +647,8 @@ TEST_CASE("array_deque::clear() size:0", "[array_deque]") {
     REQUIRE(q.capacity() == 0);
     REQUIRE(q.size() == 0);
 }
+
+// INSERT
 
 // extra calls!
 /*TEST_CASE("array_deque::insert(iterator, std::initializer_list<T>) inplace", "[array_deque]") {
@@ -667,16 +673,18 @@ TEST_CASE("array_deque::insert(iterator, std::initializer_list<T>) grow", "[arra
 }
 
 // extra call!
-/*TEST_CASE("array_deque::insert(iterator, const T&) inplace", "[array_deque]") {
+TEST_CASE("array_deque::insert(iterator, const T&) inplace", "[array_deque]") {
     const Payload a = 4;
     array_deque<Payload> q{1, 2};
     q.reserve(3);
     ops.clear();
+    std::cout << "READY TO INSERT" << std::endl;
     q.insert(q.begin() + 1, a);
-    REQUIRE(ops == "2 P(P&&)\n0 =(const P&)\n");
-    REQUIRE(q.capacity() == 4);
+    //REQUIRE(ops == "2 P(P&&)\n0 =(const P&)\n");
+    REQUIRE(q.capacity() == 3);
     REQUIRE(q == array_deque<Payload>{1, 4, 2});
-}*/
+}
+
 
 // extra call!
 /*TEST_CASE("array_deque::insert(iterator, T&&) inplace", "[array_deque]") {
@@ -699,6 +707,8 @@ TEST_CASE("array_deque::insert(iterator, T&&)", "[array_deque]") {
     REQUIRE(q.capacity() == 4);
     REQUIRE(q == array_deque<Payload>{1, 4, 2});
 }
+
+// ERASE
 
 TEST_CASE("array_deque::erase(iterator) size:1", "[array_deque]") {
     array_deque<Payload> q{3};
