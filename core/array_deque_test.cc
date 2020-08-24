@@ -650,17 +650,16 @@ TEST_CASE("array_deque::clear() size:0", "[array_deque]") {
 
 // INSERT
 
-// extra calls!
-/*TEST_CASE("array_deque::insert(iterator, std::initializer_list<T>) inplace", "[array_deque]") {
+TEST_CASE("array_deque::insert(iterator, std::initializer_list<T>) inplace", "[array_deque]") {
     std::initializer_list<Payload> a = {4, 5};
     array_deque<Payload> q{1, 2};
     q.reserve(4);
     ops.clear();
     q.insert(q.begin() + 1, a);
-    REQUIRE(ops == "");
+    REQUIRE(ops == "2 P(P&&)\n0 ~P()\n4 P(const P&)\n5 P(const P&)\n");
     REQUIRE(q.capacity() == 4);
     REQUIRE(q == array_deque<Payload>{1, 4, 5, 2});
-}*/
+}
 
 TEST_CASE("array_deque::insert(iterator, std::initializer_list<T>) grow", "[array_deque]") {
     std::initializer_list<Payload> a = {4, 5};
