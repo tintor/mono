@@ -46,17 +46,22 @@ ForwardIt uninitialized_copy_const(InputIt first, InputIt last, ForwardIt d_firs
 }
 
 template<class InputIt, class ForwardIt>
-ForwardIt uninitialized_move_backward(InputIt first, InputIt last, ForwardIt d_last) {
+void uninitialized_move_backward_and_destroy(InputIt first, InputIt last, ForwardIt d_last) {
     typedef typename std::iterator_traits<ForwardIt>::value_type Value;
-    ForwardIt current = d_last;
-    try {
-        while (first != last) {
-            ::new (static_cast<void*>(std::addressof(*--current))) Value(std::move(*--last));
-        }
-        return current;
-    } catch (...) {
-        while (d_last != current) (--d_last)->~Value();
-        throw;
+    while (first != last) {
+        auto& src = *--last;
+        ::new (static_cast<void*>(std::addressof(*--d_last))) Value(std::move(src));
+        std::destroy_at(std::addressof(src));
+    }
+}
+
+template<class InputIt, class ForwardIt>
+void uninitialized_move_and_destroy(ForwardIt d_first, InputIt first, InputIt last) {
+    typedef typename std::iterator_traits<ForwardIt>::value_type Value;
+    while (first != last) {
+        auto& src = *first++;
+        ::new (static_cast<void*>(std::addressof(*d_first++))) Value(std::move(src));
+        std::destroy_at(std::addressof(src));
     }
 }
 
@@ -400,10 +405,14 @@ class array_deque {
         }
 
         iterator it(this, pos.index);
-        expand(it, 1);
-        T* p = m_data + offset(it.index);
-        std::destroy_at(p);
-        new (p) T(args...);
+        if (expand(it, 1)) {
+            T* p = m_data + offset(it.index);
+            std::destroy_at(p);
+            new (p) T(args...);
+        } else {
+            T* p = m_data + offset(it.index);
+            new (p) T(args...);
+        }
         return it;
     }
 
@@ -551,19 +560,8 @@ class array_deque {
         std::uninitialized_move(temp.begin(), temp.end(), begin());
     }
 
-    void print(std::string name) {
-        std::cout << name << std::endl;
-        for (int i = 0; i < m_capacity; i++) {
-            bool init1 = (m_start <= i && i < m_start + m_size && m_start + m_size <= m_capacity);
-            bool init2 = (m_start + m_size > m_capacity) && (i < m_start + m_size - m_capacity || i >= m_start);
-            if (init1 || init2) std::cout << m_data[i] << ' '; else std::cout << "# ";
-        }
-        std::cout << std::endl;
-    }
-
     bool expand(iterator pos, size_t count) {
         if (m_size + count > m_capacity) {
-            print("expand grow");
             array_deque<T, Allocator, Size, growth> temp;
             temp.realloc(growth()(m_size + count));
             std::uninitialized_move(begin(), pos, temp.begin());
@@ -573,40 +571,18 @@ class array_deque {
             return false;
         }
 
-        /*if (pos.index == m_size) {
-            print("expand inline back_simple");
-            m_size += count;
-            return false;
-        }
-        if (pos.index == 0) {
-            print("expand inline front_simple");
-            if (m_start < count) m_start += m_capacity;
-            m_start -= count;
-            m_size += count;
-            return false;
-        }*/
-
         auto before = pos.index;
         auto after = m_size - pos.index;
         if (before < after) {
-            print("expand inline front");
             if (m_start < count) m_start += m_capacity;
             m_start -= count;
             m_size += count;
-
-            std::uninitialized_move(begin() + count, begin() + count + count, begin());
-            print("inline B");
-            std::move(begin() + count + count, begin() + count + pos.index, begin() + count);
+            detail::uninitialized_move_and_destroy(begin(), begin() + count, begin() + count + before);
         } else {
-            print("expand inline back");
             m_size += count;
-
-            detail::uninitialized_move_backward(end() - count - count, end() - count, end());
-            print("inline B");
-            std::move_backward(pos, end() - count, end());
+            detail::uninitialized_move_backward_and_destroy(pos, pos + after, end());
         }
-        print("end expand");
-        return true;
+        return false;
     }
 
    private:
