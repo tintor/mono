@@ -29,7 +29,8 @@ cc_library(
     name = "font",
     hdrs = ["font.h"],
     deps = [":color", ":shader"],
-    # TODO add font.cc
+    #srcs = ["font.cc"],
+    includes = ["/usr/local/Cellar/freetype/2.10.1/include/freetype2"],
 )
 
 cc_library(
