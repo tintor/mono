@@ -31,10 +31,11 @@ new_git_repository(
     shallow_since = "1589040800 -0700",
 )
 
-http_archive(
+new_git_repository(
     name = "glm",
-    urls = ["https://github.com/g-truc/glm/archive/0.9.9.8.tar.gz"],
-    build_file = "@//:glm.BUILD"
+    remote = "https://github.com/g-truc/glm.git",
+    commit = "658d8960d081e0c9c312d49758c7ef919371b428",
+    build_file = "@//:glm.BUILD",
 )
 
 new_git_repository(
@@ -45,8 +46,6 @@ new_git_repository(
 )
 
 # BOOST
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
 git_repository(
     name = "com_github_nelhage_rules_boost",
     branch = "master",
