@@ -330,7 +330,7 @@ class PairVisitor : public each<PairVisitor> {
     }
 
    private:
-    array_deque<std::pair<uint, uint>> deque;
+    mt::array_deque<std::pair<uint, uint>> deque;
     matrix<bool> visited;
 };
 

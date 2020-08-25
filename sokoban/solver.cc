@@ -204,7 +204,7 @@ class StateQueue {
     uint min_queue = 0;
     uint blocked_on_queue = 0;
     uint queue_size = 0;
-    vector<array_deque<State>> queue;
+    vector<mt::array_deque<State>> queue;
     std::mutex queue_lock;
     std::condition_variable queue_push_cv;
 };
