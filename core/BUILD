@@ -50,7 +50,7 @@ library(name = "range", deps = [":span", "@fmt"])
 library(name = "array_deque", deps = [], test_deps = ["@fmt"])
 cc_library(name = "each", hdrs = ["each.h"])
 cc_library(name = "small_bfs", hdrs = ["small_bfs.h"], deps = [":each", ":numeric"])
-cc_library(name = "file", hdrs = ["file.h"], srcs = ["file.cc"], deps = [":each", ":exception"])
+cc_library(name = "file", hdrs = ["file.h"], srcs = ["file.cc"], deps = [":each", ":exception", "@boost//:interprocess"])
 
 library(name = "zip", deps = [":span"])
 library(name = "sparse_matrix")

@@ -2,27 +2,18 @@
 #include <string_view>
 #include <optional>
 
+#include <boost/interprocess/file_mapping.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
 #include "core/each.h"
-
-class MappedFile {
-   public:
-    MappedFile(std::string_view filename);
-    MappedFile(const MappedFile&) = delete;
-    MappedFile& operator=(const MappedFile&) = delete;
-    ~MappedFile();
-
-    std::string_view view() const { return std::string_view(m_addr, m_length); }
-
-   private:
-    int m_fd;
-    size_t m_length;
-    const char* m_addr;
-};
 
 // TODO this can just be a string iterator (detached from file)
 class FileReader : public each<FileReader> {
    public:
-    FileReader(std::string_view filename) : m_file(filename), m_pos(m_file.view().begin()) {}
+    FileReader(std::string_view filename)
+        : m_file(std::string(filename).data(), boost::interprocess::read_only)
+        , m_region(m_file, boost::interprocess::read_only)
+        , m_pos(reinterpret_cast<const char*>(m_region.get_address())) {}
 
     std::string_view readline();
 
@@ -34,6 +25,7 @@ class FileReader : public each<FileReader> {
     }
 
    private:
-    MappedFile m_file;
+    boost::interprocess::file_mapping m_file;
+    boost::interprocess::mapped_region m_region;
     const char* m_pos;
 };
