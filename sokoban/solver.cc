@@ -432,7 +432,7 @@ struct Solver {
                 auto closed = (total >= open) ? total - open : 0;
 
                 lock_guard g(result_lock);
-                print("{}: states %h (%h %h {:.1f})\n", level->name, total, closed, open, 100. * open / total);
+                print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
 
                 Counters q;
                 for (const Counters& c : counters) q.add(c);
@@ -450,18 +450,18 @@ struct Solver {
                 else_ticks -= q.queue_push_ticks;
 
                 print(
-                    "elapsed %t (%Y | queue_pop %Y, corral %Y %Y, "
-                    "is_simple_deadlock %Y, is_reversible_push %Y, contains_frozen_boxes %Y, "
-                    "norm %Y, states_query %Y, heuristic %Y, "
-                    "state_insert %Y, queue_push %Y, else %Y)\n",
+                    "elapsed {} ({} | queue_pop {}, corral {} {}, "
+                    "is_simple_deadlock {}, is_reversible_push {}, contains_frozen_boxes {}, "
+                    "norm {}, states_query {}, heuristic {}, "
+                    "state_insert {}, queue_push {}, else {})\n",
                     seconds, q.total_ticks, q.queue_pop_ticks, q.corral_ticks, q.corral2_ticks,
                     q.is_simple_deadlock_ticks, q.is_reversible_push_ticks, q.contains_frozen_boxes_ticks, q.norm_ticks,
                     q.states_query_ticks, q.heuristic_ticks, q.state_insert_ticks, q.queue_push_ticks, else_ticks);
-                print("deadlocks (simple %h, frozen_box %h, heuristic %h)", q.simple_deadlocks, q.frozen_box_deadlocks,
+                print("deadlocks (simple {}, frozen_box {}, heuristic {})", q.simple_deadlocks, q.frozen_box_deadlocks,
                       q.heuristic_deadlocks);
-                print(", corral cuts %h, dups %h, updates %h", q.corral_cuts, q.duplicates, q.updates);
-                print(", locks (%Y %Y", states.overhead, states.overhead2);
-                print(" %t %t)\n", queue.overhead(), queue.overhead2());
+                print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
+                print(", locks ({} {}", states.overhead, states.overhead2);
+                print(" {} {})\n", queue.overhead(), queue.overhead2());
                 // states.print_sizes();
                 if (verbosity >= 2) {
                     auto ss = queue.top();
