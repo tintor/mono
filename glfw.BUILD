@@ -9,6 +9,5 @@ cc_library(
     name = "glfw",
     hdrs = include_files,
     includes = ["include"],
-    linkstatic = 1,
-    linkopts = ["-lglfw"],
+    linkopts = ["-framework OpenGl -L/usr/local/lib -lglfw"],
 )
