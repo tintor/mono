@@ -1,19 +1,23 @@
 #pragma once
+#include <vector>
 #include "core/numeric.h"
 #include "core/exception.h"
 
+// Row-major order
 template <typename T>
 class matrix {
    private:
-    uint _dim_a = 0;
-    uint _dim_b = 0;
+    int _dim_a = 0;
+    int _dim_b = 0;
+
     std::vector<T> _data;
 
    public:
-    void resize(uint a, uint b) {
-        _dim_a = a;
-        _dim_b = b;
-        _data.resize(a * b);
+    void resize(int rows, int cols) {
+        if (rows < 0 || cols < 0) THROW(invalid_argument);
+        _dim_a = rows;
+        _dim_b = cols;
+        _data.resize(rows * cols);
     }
 
     void fill(T value) {
@@ -22,13 +26,20 @@ class matrix {
         _data.resize(s, value);
     }
 
-    const T& operator()(uint a, uint b) const {
-        if (a >= _dim_a || b >= _dim_b) THROW(invalid_argument);
-        return _data[b * _dim_a + a];
+    auto operator()(int2 v) const { return operator()(v.y, v.x); }
+    auto operator()(int2 v) { return operator()(v.y, v.x); }
+
+    typename std::vector<T>::const_reference operator()(int row, int col) const {
+        if (row < 0 || row >= _dim_a || col < 0 || col >= _dim_b) THROW(invalid_argument);
+        return _data[col * _dim_a + row];
     }
 
-    typename std::vector<T>::reference operator()(uint a, uint b) {
-        if (a >= _dim_a || b >= _dim_b) THROW(invalid_argument);
-        return _data[b * _dim_a + a];
+    typename std::vector<T>::reference operator()(int row, int col) {
+        if (row < 0 || row >= _dim_a || col < 0 || col >= _dim_b) THROW(invalid_argument);
+        return _data[col * _dim_a + row];
     }
+
+    int rows() const { return _dim_a; }
+    int cols() const { return _dim_b; }
+    int2 shape() const { return int2{_dim_b, _dim_a}; }
 };
