@@ -139,23 +139,23 @@ void LevelEnv::Print() const {
     }
 }
 
-bool LevelEnv::Move(int dir) {
-    if (dir < 0 || dir >= 4) THROW(invalid_argument);
-
-    int cosi[] = { 1, 0, -1, 0 };
-    int sini[] = { 0, 1, 0, -1 };
-    int2 delta = {cosi[dir], sini[dir]};
+bool LevelEnv::Action(int2 delta, bool allow_move, bool allow_push) {
+    if (delta.x * delta.x + delta.y * delta.y != 1) THROW(runtime_error, "delta");
 
     int2 b = agent + delta;
     if (b.x < 0 || b.y < 0 || b.x >= wall.cols() || b.y >= wall.rows()) return false;
     if (wall(b)) return false;
 
     if (box(b)) {
-        if (wall(b + delta) || box(b + delta)) return false;
+        if (!allow_push || wall(b + delta) || box(b + delta)) return false;
         box(b + delta) = true;
         box(b) = false;
+        agent = b;
+        return true;
     }
-    agent = delta;
+
+    if (!allow_move) return false;
+    agent = b;
     return true;
 }
 

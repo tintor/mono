@@ -35,11 +35,13 @@ struct small_bfs : public each<small_bfs<T>> {
         for (auto& e : visited) e = 0;
     }
 
-    void add(T e, uint index) {
+    bool add(T e, uint index) {
         if (!visited[index]) {
             visited[index] = 1;
             queue.push(e);
+            return true;
         }
+        return false;
     }
 
     std::optional<T> next() {

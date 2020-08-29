@@ -22,6 +22,16 @@ struct Level {
     int num_boxes;
 
     DynamicState start;
+
+    const Cell* cell_by_xy(int xy) const {
+        for (const Cell* cell : cells) if (cell->xy == xy) return cell;
+        THROW(runtime_error, "cell not found");
+    }
+
+    const Cell* cell_by_xy(int x, int y) const { return cell_by_xy(x + y * width); }
+    const Cell* cell_by_xy(int2 pos) const { return cell_by_xy(pos.x, pos.y); }
+
+    int2 cell_to_vec(const Cell* cell) const { return {cell->xy % width, cell->xy / width}; }
 };
 
 inline Cell* GetCell(const Level* level, uint xy) {

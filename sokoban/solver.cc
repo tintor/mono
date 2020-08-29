@@ -243,11 +243,6 @@ struct Counters {
     }
 };
 
-bool IsValidSolution(const Level* level, const Solution& solution) {
-    // TODO implement
-    return true;
-}
-
 template <typename State>
 struct Solver {
     using Boxes = typename State::Boxes;
@@ -658,14 +653,13 @@ struct Solver {
                 }
             }
         }
-
-        if (!IsValidSolution(level, result)) THROW(runtime_error, "solution is not valid");
         return result;
     }
 };
 
 template <typename Boxes>
 Solution InternalSolve(const Level* level) {
+    PrintInfo(level);
     Solver<TState<Boxes>> solver(level);
     auto solution = solver.solve(level->start, 2);
     if (solution) return solver.solution(*solution);
@@ -723,6 +717,65 @@ Solution Solve(const Level* level) {
 #else
     return InternalSolve<DynamicBoxes>(level);
 #endif
+}
+
+template<typename Boxes>
+vector<const Cell*> ShortestPath(const Level* level, const Cell* start, const Cell* end, const Boxes& boxes) {
+    if (boxes[start->id] || boxes[end->id]) THROW(runtime_error2, "precondition");
+
+    vector<const Cell*> prev(level->cells.size());
+    small_bfs<const Cell*> visitor(level->cells.size());
+    visitor.add(start, start->id);
+    for (const Cell* a : visitor) {
+        for (auto [d, b] : a->moves) {
+            if (!boxes[b->id] && visitor.add(b, b->id)) prev[b->id] = a;
+            if (b != end) continue;
+            vector<const Cell*> path;
+            for (const Cell* p = end; p != start; p = prev[p->id]) path.push_back(p);
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+    }
+    return {};
+}
+
+void ExtractMoves(const Level* level, LevelEnv& env, const DynamicState& dest, vector<int2>& steps) {
+    const Cell* agent = level->cell_by_xy(env.agent);
+    for (const Cell* step : ShortestPath(level, agent, level->cells[dest.agent], dest.boxes)) {
+        int2 delta = level->cell_to_vec(step) - env.agent;
+        if (!env.Move(level->cell_to_vec(step) - env.agent)) THROW(runtime_error2, "move failed");
+        steps.push_back(delta);
+    }
+}
+
+void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, const DynamicState& state1, vector<int2>& steps) {
+    const Cell* src = nullptr;
+    const Cell* dest = nullptr;
+    for (int j = 0; j < level->alive().size(); j++) {
+        if (state0.boxes[j] && !state1.boxes[j]) src = level->cells[j];
+        if (!state0.boxes[j] && state1.boxes[j]) dest = level->cells[j];
+    }
+    if (!src || !dest || src == dest) THROW(runtime_error2, "oops!");
+
+    int2 delta = level->cell_to_vec(dest) - level->cell_to_vec(src);
+    if (!env.Push(delta)) THROW(runtime_error2, "push failed");
+    steps.push_back(delta);
+}
+
+// Returns steps as deltas and number of pushes.
+pair<vector<int2>, int> Solve(LevelEnv env) {
+    auto level = LoadLevel(env);
+    auto pushes = Solve(level);
+    if (pushes.empty()) return {};
+
+    vector<int2> steps;
+    ExtractMoves(level, env, pushes[0], steps);
+    for (int i = 1; i < pushes.size(); i++) {
+        ExtractPush(level, env, pushes[i - 1], pushes[i], steps);
+        ExtractMoves(level, env, pushes[i], steps);
+    }
+    if (!env.IsSolved()) THROW(runtime_error2, "not solved!");
+    return {steps, pushes.size()};
 }
 
 template <typename Cell>

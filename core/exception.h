@@ -61,6 +61,7 @@ class exception : public std::exception {
     }
 
 EXCEPTION(runtime_error);
+EXCEPTION(runtime_error2);
 EXCEPTION(overflow_error);
 EXCEPTION(not_implemented);
 EXCEPTION(invalid_argument);

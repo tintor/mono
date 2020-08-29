@@ -28,62 +28,58 @@ const cspan<string_view> Blacklist = {
 
 constexpr string_view prefix = "sokoban/levels/";
 
-vector<int> Solve(LevelEnv env) {
-    auto level = LoadLevel(env);
-    auto pushes = Solve(level);
-
-    vector<int> moves;
-    /*for (const auto& state : pushes) {
-        // move agent in env to position in state (last action is push(
-    }*/
-    // TODO convert pushes to moves
-    return moves;
-}
+constexpr bool kShowPushes = true;
+constexpr bool kShowSteps = false;
 
 string Solve(string_view file) {
     Timestamp start_ts;
     atomic<int> total = 0;
     atomic<int> completed = 0;
-    vector<pair<string, const Level*>> levels;
     mutex levels_lock;
 
     vector<string> skipped;
     vector<string> unsolved;
 
+    vector<string> levels;
     if (file.find(":"sv) != string_view::npos) {
-        auto s = cat(prefix, file);
-        levels.emplace_back(s, LoadLevel(s));
+        levels.push_back(cat(prefix, file));
     } else {
         auto num = NumberOfLevels(cat(prefix, file));
-        parallel_for(num, 1, [&](size_t task) {
-            string name = fmt::format("{}:{}", file, task + 1);
+        for (int i = 1; i <= num; i++) {
+            string name = fmt::format("{}:{}", file, i);
             if (contains(Blacklist, string_view(name))) {
-                unique_lock g(levels_lock);
                 skipped.emplace_back(split(name, {':', '/'}).back());
-                return;
+                continue;
             }
-
-            auto s = cat(prefix, name);
-            auto level = LoadLevel(s);
-            unique_lock g(levels_lock);
-            levels.emplace_back(s, level);
-        });
-        sort(levels, [](const auto& a, const auto& b) { return natural_less(a.first, b.first); });
+            levels.push_back(name);
+        }
     }
 
     parallel_for(levels.size(), 1, [&](size_t task) {
-        auto name = levels[task].first;
-        auto level = levels[task].second;
+        auto name = levels[task];
 
-        PrintInfo(level);
         total += 1;
 
-        const auto solution = Solve(level);  // TODO pass option 2
-        if (!solution.empty()) {
+        LevelEnv env;
+        env.Load(name);
+        const auto solution = Solve(env);
+        if (!solution.first.empty()) {
             completed += 1;
-            fmt::print("{}: solved in {} pushes!\n", name, solution.size());
-            if (true) {
-                for (const auto& s : solution) Print(level, s);
+            fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
+            if (kShowSteps) {
+                env.Print();
+                for (const int2 delta : solution.first) {
+                    env.Action(delta);
+                    env.Print();
+                }
+                if (!env.IsSolved()) THROW(runtime_error2, "not solved");
+            }
+            if (kShowPushes) {
+                env.Print();
+                for (const int2 delta : solution.first) {
+                    if (env.Push(delta)) env.Print(); else env.Move(delta);
+                }
+                if (!env.IsSolved()) THROW(runtime_error2, "not solved");
             }
         } else {
             fmt::print("{}: no solution!\n", name);

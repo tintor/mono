@@ -1,9 +1,11 @@
 #pragma once
+#include "sokoban/level_env.h"
 #include "sokoban/level.h"
 #include "sokoban/state.h"
+#include <vector>
 
 using Solution = std::vector<DynamicState>;
 
-Solution Solve(const Level* level);
+std::pair<std::vector<int2>, int> Solve(LevelEnv env);
 
 void GenerateDeadlocks(const Level* level);
