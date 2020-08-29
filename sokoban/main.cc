@@ -120,7 +120,6 @@ int Main(cspan<string_view> args) {
     return 0;
 }
 
-// TODO move to core/main.h
 int main(int argc, char** argv) {
     InitSegvHandler();
     // Timestamp::init();

@@ -461,7 +461,7 @@ struct Solver {
                       q.heuristic_deadlocks);
                 print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
                 print(", locks ({} {}", states.overhead, states.overhead2);
-                print(" {} {})\n", queue.overhead(), queue.overhead2());
+                print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
                 // states.print_sizes();
                 if (verbosity >= 2) {
                     auto ss = queue.top();
