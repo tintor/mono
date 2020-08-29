@@ -432,7 +432,7 @@ struct Solver {
                 auto closed = (total >= open) ? total - open : 0;
 
                 lock_guard g(result_lock);
-                print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
+                print("states {} ({} {} {:.1f})\n", total, closed, open, 100. * open / total);
 
                 Counters q;
                 for (const Counters& c : counters) q.add(c);
@@ -620,6 +620,7 @@ struct Solver {
     pair<State, StateInfo> previous(pair<State, StateInfo> p) {
         auto [s, si] = p;
         if (si.distance <= 0) THROW(runtime_error);
+        normalize(s, visitor);
 
         State ps;
         ps.agent = si.prev_agent;
@@ -633,8 +634,9 @@ struct Solver {
         if (!c || !ps.boxes[c->id]) THROW(runtime_error);
         ps.boxes.reset(c->id);
         ps.boxes.set(b->id);
-        normalize(ps, visitor);
-        return {ps, states.get(ps, StateMap<State>::shard(ps))};
+        State norm_ps = ps;
+        normalize(norm_ps, visitor);
+        return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
     }
 
     Solution solution(pair<State, StateInfo> s) {
@@ -645,6 +647,18 @@ struct Solver {
             s = previous(s);
         }
         std::reverse(result.begin(), result.end());
+
+        if (result.size() >= 2) {
+            DynamicState& v = result[result.size() - 2];
+            DynamicState& w = result[result.size() - 1];
+            for (int i = 0; i < level->alive().size(); i++) {
+                if (v.boxes[i] && !w.boxes[i]) {
+                    w.agent = i;
+                    break;
+                }
+            }
+        }
+
         if (!IsValidSolution(level, result)) THROW(runtime_error, "solution is not valid");
         return result;
     }
@@ -654,7 +668,7 @@ template <typename Boxes>
 Solution InternalSolve(const Level* level) {
     Solver<TState<Boxes>> solver(level);
     auto solution = solver.solve(level->start, 2);
-    if (solution) return {solution->first};  // solver.solution(*solution);
+    if (solution) return solver.solution(*solution);
     return {};
 }
 

@@ -9,7 +9,6 @@
 #include "sokoban/util.h"
 
 struct Level {
-    std::string name;
     int width;            // for printing only
     std::vector<char> buffer;  // xy -> code, for printing only
 
@@ -62,7 +61,7 @@ void Print(const Level* level, const State& key, std::function<std::string_view(
 }
 
 struct LevelEnv;
-const Level* LoadLevel(const LevelEnv& level_env, std::string_view name);
+const Level* LoadLevel(const LevelEnv& level_env);
 const Level* LoadLevel(std::string_view filename);
 
 uint CellCount(std::string_view filename);

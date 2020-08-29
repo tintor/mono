@@ -28,19 +28,31 @@ const cspan<string_view> Blacklist = {
 
 constexpr string_view prefix = "sokoban/levels/";
 
+vector<int> Solve(LevelEnv env) {
+    auto level = LoadLevel(env);
+    auto pushes = Solve(level);
+
+    vector<int> moves;
+    /*for (const auto& state : pushes) {
+        // move agent in env to position in state (last action is push(
+    }*/
+    // TODO convert pushes to moves
+    return moves;
+}
+
 string Solve(string_view file) {
     Timestamp start_ts;
     atomic<int> total = 0;
     atomic<int> completed = 0;
-    vector<const Level*> levels;
+    vector<pair<string, const Level*>> levels;
     mutex levels_lock;
 
     vector<string> skipped;
     vector<string> unsolved;
 
     if (file.find(":"sv) != string_view::npos) {
-        auto level = LoadLevel(cat(prefix, file));
-        levels.push_back(level);
+        auto s = cat(prefix, file);
+        levels.emplace_back(s, LoadLevel(s));
     } else {
         auto num = NumberOfLevels(cat(prefix, file));
         parallel_for(num, 1, [&](size_t task) {
@@ -51,15 +63,17 @@ string Solve(string_view file) {
                 return;
             }
 
-            auto level = LoadLevel(cat(prefix, name));
+            auto s = cat(prefix, name);
+            auto level = LoadLevel(s);
             unique_lock g(levels_lock);
-            levels.push_back(level);
+            levels.emplace_back(s, level);
         });
-        sort(levels, [](const Level* a, const Level* b) { return natural_less(a->name, b->name); });
+        sort(levels, [](const auto& a, const auto& b) { return natural_less(a.first, b.first); });
     }
 
     parallel_for(levels.size(), 1, [&](size_t task) {
-        auto level = levels[task];
+        auto name = levels[task].first;
+        auto level = levels[task].second;
 
         PrintInfo(level);
         total += 1;
@@ -67,14 +81,14 @@ string Solve(string_view file) {
         const auto solution = Solve(level);  // TODO pass option 2
         if (!solution.empty()) {
             completed += 1;
-            fmt::print("{}: solved in {} pushes!\n", level->name, solution.size());
-            if (false) {
+            fmt::print("{}: solved in {} pushes!\n", name, solution.size());
+            if (true) {
                 for (const auto& s : solution) Print(level, s);
             }
         } else {
-            fmt::print("{}: no solution!\n", level->name);
+            fmt::print("{}: no solution!\n", name);
             unique_lock g(levels_lock);
-            unsolved.emplace_back(split(level->name, {':', '/'}).back());
+            unsolved.emplace_back(split(name, {':', '/'}).back());
         }
         fmt::print("\n");
     });

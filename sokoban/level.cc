@@ -326,10 +326,10 @@ void assign(DynamicBoxes& b, int index, bool value) {
 const Level* LoadLevel(string_view filename) {
     LevelEnv env;
     env.Load(filename);
-    return LoadLevel(env, filename);
+    return LoadLevel(env);
 }
 
-const Level* LoadLevel(const LevelEnv& env, string_view name) {
+const Level* LoadLevel(const LevelEnv& env) {
     Minimal m;
     m.init(env);
     m.move_agent_from_deadend();
@@ -340,7 +340,6 @@ const Level* LoadLevel(const LevelEnv& env, string_view name) {
     // TODO destroy on exception
     Level* level = new Level;
     level->buffer = m.cell;
-    level->name = name;
     level->width = m.w;
     level->cells = m.cells(level);
 
@@ -375,7 +374,7 @@ inline double Complexity(const Level* level) {
 }
 
 void PrintInfo(const Level* level) {
-    fmt::print("level [{}], cells {}, alive {}, boxes {}, choose {}, complexity {}\n", level->name, level->cells.size(),
+    fmt::print("cells {}, alive {}, boxes {}, choose {}, complexity {}\n", level->cells.size(),
           level->num_alive, level->num_boxes, Choose(level->num_alive, level->num_boxes), round(Complexity(level)));
     Print(level, level->start);
 }
