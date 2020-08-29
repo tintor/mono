@@ -11,6 +11,7 @@
 struct Level {
     int width;            // for printing only
     std::vector<char> buffer;  // xy -> code, for printing only
+    std::vector<int2> initial_steps;
 
     // TODO unique_ptr<Cell>
     std::vector<Cell*> cells;  // ordinal -> Cell*, goals first, then alive, then dead cells

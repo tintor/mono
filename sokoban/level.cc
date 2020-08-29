@@ -29,6 +29,7 @@ struct Minimal {
     std::array<int, 4> dirs;
     std::array<int, 8> dirs8;
     int cell_count = 0;
+    vector<int2> initial_steps;
 
     void init(const LevelEnv& env) {
         if (!env.IsValid()) THROW(invalid_argument, "level must be valid");
@@ -107,6 +108,10 @@ struct Minimal {
             }
             cell[agent] = Code::Wall;
             agent += m;
+            if (m == 1) initial_steps.push_back(int2{1, 0});
+            if (m == -1) initial_steps.push_back(int2{-1, 0});
+            if (m == -w) initial_steps.push_back(int2{0, -1});
+            if (m == w) initial_steps.push_back(int2{0, 1});
         }
     }
 
@@ -341,6 +346,7 @@ const Level* LoadLevel(const LevelEnv& env) {
     Level* level = new Level;
     level->buffer = m.cell;
     level->width = m.w;
+    level->initial_steps = m.initial_steps;
     level->cells = m.cells(level);
 
     level->num_boxes = m.num_boxes();

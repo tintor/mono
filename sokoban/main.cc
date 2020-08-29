@@ -57,9 +57,9 @@ string Solve(string_view file) {
 
     parallel_for(levels.size(), 1, [&](size_t task) {
         auto name = levels[task];
-
         total += 1;
 
+        fmt::print("Level {}\n", name);
         LevelEnv env;
         env.Load(name);
         const auto solution = Solve(env);

@@ -769,6 +769,10 @@ pair<vector<int2>, int> Solve(LevelEnv env) {
     if (pushes.empty()) return {};
 
     vector<int2> steps;
+    for (int2 step : level->initial_steps) {
+        if (!env.Action(step)) THROW(runtime_error2, "initial step failed");
+        steps.push_back(step);
+    }
     ExtractMoves(level, env, pushes[0], steps);
     for (int i = 1; i < pushes.size(); i++) {
         ExtractPush(level, env, pushes[i - 1], pushes[i], steps);
