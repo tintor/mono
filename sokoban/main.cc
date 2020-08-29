@@ -46,7 +46,7 @@ string Solve(string_view file) {
     } else {
         auto num = NumberOfLevels(cat(prefix, file));
         for (int i = 1; i <= num; i++) {
-            string name = fmt::format("{}:{}", file, i);
+            string name = fmt::format("{}{}:{}", prefix, file, i);
             if (contains(Blacklist, string_view(name))) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
