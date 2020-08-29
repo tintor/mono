@@ -154,6 +154,22 @@ struct Minimal {
     }
 
     uint find_dead_cells() {
+        uint count = 0;
+
+        // Mark all empty corner cells as dead.
+        for (int i = 0; i < cell.size(); i++) {
+            if (!empty(i)) continue;
+            for (int d = 0; d < 4; d++) {
+                int a = i + dirs[d];
+                int b = i + dirs[(d + 1) % 4];
+                if (!open(a) && !open(b)) {
+                    cell[i] = Code::Dead;
+                    count += 1;
+                    break;
+                }
+            }
+        }
+
         small_bfs<std::pair<ushort, ushort>> visitor(cell.size() * cell.size());
         const auto add = [this, &visitor](uint agent, uint box) {
             check(agent);
@@ -161,34 +177,34 @@ struct Minimal {
             visitor.add(std::pair<ushort, ushort>(agent, box), agent * cell.size() + box);
         };
 
-        uint count = 0;
-        for (int i = 0; i < cell.size(); i++)
-            if (empty(i)) {
-                for (int m : dirs)
-                    if (open(i + m)) add(i + m, i);
+        for (int i = 0; i < cell.size(); i++) {
+            if (!empty(i) || goal(i)) continue;
 
-                bool dead = true;
-                for (auto [agent, box] : visitor) {
-                    for (int m : dirs) {
-                        if (open(agent + m) && agent + m != box) {
-                            add(agent + m, box);
-                            continue;
+            for (int m : dirs)
+                if (open(i + m)) add(i + m, i);
+
+            bool dead = true;
+            for (auto [agent, box] : visitor) {
+                for (int m : dirs) {
+                    if (open(agent + m) && agent + m != box) {
+                        add(agent + m, box);
+                        continue;
+                    }
+                    if (open(agent + m) && agent + m == box && open(agent + m + m)) {
+                        if (goal(agent + m + m)) {
+                            visitor.clear();
+                            dead = false;
+                            break;
                         }
-                        if (open(agent + m) && agent + m == box && open(agent + m + m)) {
-                            if (goal(agent + m + m)) {
-                                visitor.clear();
-                                dead = false;
-                                break;
-                            }
-                            if (alive(agent + m + m)) add(agent + m, agent + m + m);
-                        }
+                        if (alive(agent + m + m) && cell[agent + m + m] != Code::Dead) add(agent + m, agent + m + m);
                     }
                 }
-                if (dead) {
-                    cell[i] = Code::Dead;
-                    count += 1;
-                }
             }
+            if (dead) {
+                cell[i] = Code::Dead;
+                count += 1;
+            }
+        }
         return count;
     }
 
