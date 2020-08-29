@@ -1,4 +1,5 @@
 #include "sokoban/solver.h"
+#include "sokoban/level_env.h"
 
 #include "fmt/core.h"
 #include "fmt/ostream.h"

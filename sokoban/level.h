@@ -5,7 +5,6 @@
 #include "core/small_bfs.h"
 
 #include "sokoban/cell.h"
-#include "sokoban/code.h"
 #include "sokoban/state.h"
 #include "sokoban/util.h"
 
@@ -35,7 +34,7 @@ inline Cell* GetCell(const Level* level, uint xy) {
 template <typename Boxes>
 std::string_view Emoji(const Level* level, Agent agent, const Boxes& boxes, uint xy, const Boxes& frozen,
                   std::function<std::string_view(Cell*)> fn) {
-    if (level->buffer[xy] == Code::Wall) return "✴️ ";
+    if (level->buffer[xy] == '#') return "✴️ ";
     if (level->buffer[xy] == 'e') return "  ";
 
     Cell* c = GetCell(level, xy);
@@ -62,7 +61,9 @@ void Print(const Level* level, const State& key, std::function<std::string_view(
     }
 }
 
-int NumberOfLevels(std::string_view filename);
+struct LevelEnv;
+const Level* LoadLevel(const LevelEnv& level_env, std::string_view name);
 const Level* LoadLevel(std::string_view filename);
+
 uint CellCount(std::string_view filename);
 void PrintInfo(const Level* level);

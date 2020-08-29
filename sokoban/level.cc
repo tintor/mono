@@ -3,66 +3,22 @@
 #include "sokoban/level.h"
 
 #include "core/array_deque.h"
-#include "core/exception.h"
-#include "core/file.h"
-#include "core/matrix.h"
 #include "core/range.h"
 #include "core/small_bfs.h"
 #include "core/string.h"
 #include "sokoban/util.h"
+#include "sokoban/level_env.h"
 
 using std::string_view;
 using std::string;
 using std::vector;
 
-int NumberOfLevels(string_view filename) {
-    int currentLevelNo = 0;
-    bool inside = false;
-    for (auto line : FileReader(filename)) {
-        if (line.empty())
-            inside = false;
-        else if (!inside) {
-            currentLevelNo += 1;
-            inside = true;
-        }
-    }
-    return currentLevelNo;
-}
-
-static const std::regex level_suffix("(.+):(\\d+)");
-
-static bool valid(string_view line) {
-    for (char c : line)
-        if (c != Code::Box && c != Code::Space && c != Code::Wall && c != Code::BoxGoal && c != Code::AgentGoal &&
-            c != Code::Goal && c != Code::Agent)
-            return false;
-    return !line.empty();
-}
-
-static vector<string> loadLevelLines(string_view filename) {
-    int desiredLevelNo = 1;
-    std::cmatch m;
-    string temp;
-    if (match(filename, level_suffix, m)) {
-        temp = m[1].str();
-        filename = temp;
-        desiredLevelNo = std::stoi(m[2].str());
-    }
-
-    vector<string> lines;
-    int currentLevelNo = 0;
-    bool inside = false;
-    for (auto line : FileReader(filename)) {
-        if (!inside && valid(line)) {
-            currentLevelNo += 1;
-            inside = true;
-        } else if (inside && !valid(line))
-            inside = false;
-
-        if (inside && currentLevelNo == desiredLevelNo) lines.push_back(string(line));
-    }
-    return lines;
-}
+namespace Code {
+constexpr char Wall = '#';
+constexpr char Goal = '.';
+constexpr char Space = ' ';
+constexpr char Dead = ':';
+};
 
 struct Minimal {
     // xy is encoded as x + y * W
@@ -74,28 +30,24 @@ struct Minimal {
     std::array<int, 8> dirs8;
     int cell_count = 0;
 
-    void init(const vector<string>& lines) {
-        w = 0;
-        for (const string& s : lines) w = std::max(w, int(s.size()));
-        h = lines.size();
+    void init(const LevelEnv& env) {
+        if (!env.IsValid()) THROW(invalid_argument, "level must be valid");
+        w = env.wall.cols();
+        h = env.wall.rows();
 
-        box.resize(lines.size() * w, false);
-        cell.resize(lines.size() * w, Code::Space);
+        box.resize(h * w, false);
+        cell.resize(h * w, Code::Space);
 
-        for (int row = 0; row < lines.size(); row++) {
+        for (int row = 0; row < h; row++) {
             for (int col = 0; col < w; col++) {
                 int xy = col + row * w;
-                char c = (col < lines[row].size()) ? lines[row][col] : Code::Space;
-                if (c == Code::AgentGoal || c == Code::Agent) {
-                    if (agent) THROW(invalid_argument, "need exactly one agent %s %s", agent, xy);
-                    agent = xy;
-                }
-                if (c == Code::Box || c == Code::BoxGoal) box[xy] = true;
-                if (c == Code::Goal || c == Code::AgentGoal || c == Code::BoxGoal) cell[xy] = Code::Goal;
-                if (c == Code::Wall) cell[xy] = Code::Wall;
+                int2 i = {col, row};
+                if (env.box(i)) box[xy] = true;
+                if (env.goal(i)) cell[xy] = Code::Goal;
+                if (env.wall(i)) cell[xy] = Code::Wall;
             }
         }
-        if (!agent) THROW(invalid_argument, "need exactly one agent");
+        agent = env.agent.x + env.agent.y * w;
 
         dirs[0] = -1;
         dirs[1] = +w;
@@ -299,8 +251,10 @@ struct Minimal {
 };
 
 uint CellCount(string_view name) {
+    LevelEnv env;
+    env.Load(name);
     Minimal m;
-    m.init(loadLevelLines(name));
+    m.init(env);
     m.move_agent_from_deadend();
     m.remove_deadends();
     m.cleanup_walls();
@@ -374,9 +328,15 @@ void assign(DynamicBoxes& b, int index, bool value) {
         b.reset(index);
 }
 
-const Level* LoadLevel(string_view name) {
+const Level* LoadLevel(string_view filename) {
+    LevelEnv env;
+    env.Load(filename);
+    return LoadLevel(env, filename);
+}
+
+const Level* LoadLevel(const LevelEnv& env, string_view name) {
     Minimal m;
-    m.init(loadLevelLines(name));
+    m.init(env);
     m.move_agent_from_deadend();
     m.remove_deadends();
     m.cleanup_walls();
