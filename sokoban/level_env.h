@@ -12,6 +12,7 @@ struct LevelEnv {
     void Load(std::string_view filename);
     bool IsValid() const; // Valid doesn't imply solvable!
     void Print() const;
+    void Unprint() const;
 
     bool Action(int2 delta, bool allow_move = true, bool allow_push = true);
     bool Push(int2 delta) { return Action(delta, false, true); }

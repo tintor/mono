@@ -139,6 +139,16 @@ void LevelEnv::Print() const {
     }
 }
 
+void LevelEnv::Unprint() const {
+    for (int r = 0; r < wall.rows(); r++) {
+        std::cout << "\33[2K"; // erase current line
+        std::cout << "\033[A"; // more cursor up
+        std::cout.flush();
+    }
+    std::cout << "\r";
+    std::cout.flush();
+}
+
 bool LevelEnv::Action(int2 delta, bool allow_move, bool allow_push) {
     if (delta.x * delta.x + delta.y * delta.y != 1) THROW(runtime_error, "delta");
 
