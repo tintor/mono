@@ -141,11 +141,9 @@ void LevelEnv::Print() const {
 
 void LevelEnv::Unprint() const {
     for (int r = 0; r < wall.rows(); r++) {
-        std::cout << "\33[2K"; // erase current line
         std::cout << "\033[A"; // more cursor up
-        std::cout.flush();
+        std::cout << "\33[2K"; // erase current line
     }
-    std::cout << "\r";
     std::cout.flush();
 }
 
