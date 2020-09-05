@@ -30,6 +30,8 @@ using absl::flat_hash_map;
 using absl::flat_hash_set;
 using fmt::print;
 
+double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
+
 template <typename State>
 struct StateMap {
     constexpr static int SHARDS = 64;
@@ -103,7 +105,7 @@ void ensure_size(vector<T>& vec, size_t s) {
 template <typename State>
 class StateQueue {
    public:
-    StateQueue() { queue.resize(256); }
+    StateQueue(uint concurrency) : _concurrency(concurrency) { queue.resize(256); }
 
     void push(const State& s, uint priority) {
         Timestamp lock_ts;
@@ -136,7 +138,7 @@ class StateQueue {
             blocked_on_queue += 1;
             while (queue_size == 0) {
                 if (!running) return nullopt;
-                if (blocked_on_queue >= std::thread::hardware_concurrency()) {  // TODO remove this dependency
+                if (blocked_on_queue >= _concurrency) {
                     running = false;
                     queue_push_cv.notify_all();
                     return nullopt;
@@ -203,6 +205,7 @@ class StateQueue {
     long _overhead2 = 0;
     uint min_queue = 0;
     uint blocked_on_queue = 0;
+    const uint _concurrency;
     uint queue_size = 0;
     vector<mt::array_deque<State>> queue;
     std::mutex queue_lock;
@@ -243,6 +246,8 @@ struct Counters {
     }
 };
 
+const static uint kConcurrency = std::thread::hardware_concurrency();
+
 template <typename State>
 struct Solver {
     using Boxes = typename State::Boxes;
@@ -254,7 +259,7 @@ struct Solver {
     small_bfs<const Cell*> visitor;
     Boxes goals;
 
-    Solver(const Level* level) : level(level), visitor(level->cells.size()) {
+    Solver(const Level* level) : level(level), queue(kConcurrency), visitor(level->cells.size()) {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
@@ -445,13 +450,13 @@ struct Solver {
                 else_ticks -= q.queue_push_ticks;
 
                 print(
-                    "elapsed {} ({} | queue_pop {}, corral {} {}, "
-                    "is_simple_deadlock {}, is_reversible_push {}, contains_frozen_boxes {}, "
-                    "norm {}, states_query {}, heuristic {}, "
-                    "state_insert {}, queue_push {}, else {})\n",
-                    seconds, q.total_ticks, q.queue_pop_ticks, q.corral_ticks, q.corral2_ticks,
-                    q.is_simple_deadlock_ticks, q.is_reversible_push_ticks, q.contains_frozen_boxes_ticks, q.norm_ticks,
-                    q.states_query_ticks, q.heuristic_ticks, q.state_insert_ticks, q.queue_push_ticks, else_ticks);
+                    "elapsed {} ({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, "
+                    "is_simple_deadlock {:.1f}, is_reversible_push {:.1f}, contains_frozen_boxes {:.1f}, "
+                    "norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, "
+                    "state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
+                    seconds, Sec(q.total_ticks), Sec(q.queue_pop_ticks), Sec(q.corral_ticks), Sec(q.corral2_ticks),
+                    Sec(q.is_simple_deadlock_ticks), Sec(q.is_reversible_push_ticks), Sec(q.contains_frozen_boxes_ticks), Sec(q.norm_ticks),
+                    Sec(q.states_query_ticks), Sec(q.heuristic_ticks), Sec(q.state_insert_ticks), Sec(q.queue_push_ticks), Sec(else_ticks));
                 print("deadlocks (simple {}, frozen_box {}, heuristic {})", q.simple_deadlocks, q.frozen_box_deadlocks,
                       q.heuristic_deadlocks);
                 print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
@@ -475,7 +480,7 @@ struct Solver {
             }
         });
 
-        parallel(1, [&](size_t thread_id) {
+        parallel(kConcurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
             small_bfs<const Cell*> agent_visitor(level->cells.size());
             small_bfs<const Cell*> tmp_visitor(level->cells.size());
@@ -551,7 +556,7 @@ struct Solver {
                         StateInfo* qs = states.query(ns, shard);
                         if (qs) {
                             q.duplicates += 1;
-                            if (si.distance + 1 >= qs->distance) {
+                            if (true /*not looking for minimal solution*/ || si.distance + 1 >= qs->distance) {
                                 // existing state
                                 states.unlock(shard);
                             } else {
@@ -614,19 +619,20 @@ struct Solver {
 
     pair<State, StateInfo> previous(pair<State, StateInfo> p) {
         auto [s, si] = p;
-        if (si.distance <= 0) THROW(runtime_error);
+        if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
         normalize(s, visitor);
 
         State ps;
         ps.agent = si.prev_agent;
         ps.boxes = s.boxes;
         const Cell* a = level->cells[ps.agent];
-        if (!a) THROW(runtime_error);
+        if (!a) THROW(runtime_error, "A null");
         const Cell* b = a->dir(si.dir);
-        if (!b) THROW(runtime_error);
-        if (ps.boxes[b->id]) THROW(runtime_error);
+        if (!b) THROW(runtime_error, "B null");
+        if (ps.boxes[b->id]) THROW(runtime_error, "box on B");
         const Cell* c = b->dir(si.dir);
-        if (!c || !ps.boxes[c->id]) THROW(runtime_error);
+        if (!c) THROW(runtime_error, "C null");
+        if (!ps.boxes[c->id]) THROW(runtime_error, "no box on C");
         ps.boxes.reset(c->id);
         ps.boxes.set(b->id);
         State norm_ps = ps;
@@ -721,7 +727,7 @@ Solution Solve(const Level* level) {
 
 template<typename Boxes>
 vector<const Cell*> ShortestPath(const Level* level, const Cell* start, const Cell* end, const Boxes& boxes) {
-    if (boxes[start->id] || boxes[end->id]) THROW(runtime_error2, "precondition");
+    if (boxes[start->id] || boxes[end->id]) THROW(runtime_error, "precondition");
 
     vector<const Cell*> prev(level->cells.size());
     small_bfs<const Cell*> visitor(level->cells.size());
@@ -743,7 +749,7 @@ void ExtractMoves(const Level* level, LevelEnv& env, const DynamicState& dest, v
     const Cell* agent = level->cell_by_xy(env.agent);
     for (const Cell* step : ShortestPath(level, agent, level->cells[dest.agent], dest.boxes)) {
         int2 delta = level->cell_to_vec(step) - env.agent;
-        if (!env.Move(level->cell_to_vec(step) - env.agent)) THROW(runtime_error2, "move failed");
+        if (!env.Move(level->cell_to_vec(step) - env.agent)) THROW(runtime_error, "move failed");
         steps.push_back(delta);
     }
 }
@@ -755,22 +761,22 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
         if (state0.boxes[j] && !state1.boxes[j]) src = level->cells[j];
         if (!state0.boxes[j] && state1.boxes[j]) dest = level->cells[j];
     }
-    if (!src || !dest || src == dest) THROW(runtime_error2, "oops!");
+    if (!src || !dest || src == dest) THROW(runtime_error, "oops!");
 
     int2 delta = level->cell_to_vec(dest) - level->cell_to_vec(src);
-    if (!env.Push(delta)) THROW(runtime_error2, "push failed");
+    if (!env.Push(delta)) THROW(runtime_error, "push failed (delta {} {})", int(delta.x), int(delta.y));
     steps.push_back(delta);
 }
 
 // Returns steps as deltas and number of pushes.
 pair<vector<int2>, int> Solve(LevelEnv env) {
     auto level = LoadLevel(env);
-    auto pushes = Solve(level);
+    auto pushes = InternalSolve<DynamicBoxes>(level);
     if (pushes.empty()) return {};
 
     vector<int2> steps;
     for (int2 step : level->initial_steps) {
-        if (!env.Action(step)) THROW(runtime_error2, "initial step failed");
+        if (!env.Action(step)) THROW(runtime_error, "initial step failed");
         steps.push_back(step);
     }
     ExtractMoves(level, env, pushes[0], steps);
@@ -778,7 +784,7 @@ pair<vector<int2>, int> Solve(LevelEnv env) {
         ExtractPush(level, env, pushes[i - 1], pushes[i], steps);
         ExtractMoves(level, env, pushes[i], steps);
     }
-    if (!env.IsSolved()) THROW(runtime_error2, "not solved!");
+    if (!env.IsSolved()) THROW(runtime_error, "not solved!");
     return {steps, pushes.size()};
 }
 
@@ -791,7 +797,7 @@ void InternalGenerateDeadlocks(const Level* level) {
     Solver<State> solver(level);
     vector<State> deadlocks;
     for (auto boxes : range(1, MaxBoxes + 1)) solver.generate_deadlocks(boxes, deadlocks);
-    print("found deadlocks {} in %T\n", deadlocks.size(), ts.elapsed());
+    print("found deadlocks {} in {}\n", deadlocks.size(), ts.elapsed());
 }
 
 void GenerateDeadlocks(const Level* level) {
