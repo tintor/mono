@@ -28,8 +28,7 @@ const cspan<string_view> Blacklist = {
 
 constexpr string_view prefix = "sokoban/levels/";
 
-constexpr bool kShowPushes = true;
-constexpr bool kShowSteps = false;
+constexpr bool kAnimateSolution = true;
 
 string Solve(string_view file) {
     Timestamp start_ts;
@@ -66,18 +65,15 @@ string Solve(string_view file) {
         if (!solution.first.empty()) {
             completed += 1;
             fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
-            if (kShowSteps) {
+            if (kAnimateSolution) {
                 env.Print();
+                std::this_thread::sleep_for(125ms);
+                env.Unprint();
                 for (const int2 delta : solution.first) {
                     env.Action(delta);
                     env.Print();
-                }
-                if (!env.IsSolved()) THROW(runtime_error2, "not solved");
-            }
-            if (kShowPushes) {
-                env.Print();
-                for (const int2 delta : solution.first) {
-                    if (env.Push(delta)) env.Print(); else env.Move(delta);
+                    std::this_thread::sleep_for(125ms);
+                    env.Unprint();
                 }
                 if (!env.IsSolved()) THROW(runtime_error2, "not solved");
             }
