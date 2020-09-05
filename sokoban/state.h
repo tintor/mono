@@ -2,19 +2,42 @@
 #include "core/array_bool.h"
 #include "core/bits.h"
 #include "core/exception.h"
-//#include "core/hash.h"
 #include "core/murmur3.h"
 
 using Agent = uint;
 
+inline bool equal(const std::vector<char>& a, const std::vector<char>& b) {
+    size_t m = std::min(a.size(), b.size());
+    if (!std::equal(a.begin(), a.begin() + m, b.begin())) return false;
+
+    for (size_t i = m; i < a.size(); i++) if (a[i]) return false;
+    for (size_t i = m; i < b.size(); i++) if (b[i]) return false;
+    return true;
+}
+
+inline bool contains(const std::vector<char>& a, const std::vector<char>& b) {
+    for (int i = 0; i < b.size(); i++) {
+        if (b[i] && (i >= a.size() || !a[i])) return false;
+    }
+    return true;
+}
+
+inline size_t hash(const std::vector<char>& a) {
+    size_t m = 0;
+    for (size_t i = 0; i < a.size(); i++) if (a[i]) m = i;
+    size_t hash = 0;
+    for (size_t i = 0; i < a.size(); i++) if (a[i]) hash ^= 1 << (i % 64);
+    return hash;
+}
+
 struct DynamicBoxes {
-    bool operator[](uint index) const { return data[index]; }
-    void set(uint index) { data.set(index); }
-    void reset(uint index) { data.reset(index); }
+    bool operator[](uint index) const { return index < data.size() && data[index]; }
+    void set(uint index) { if (index >= data.size()) data.resize(index + 1); data[index] = 1; }
+    void reset(uint index) { if (index < data.size()) data[index] = 0; }
     void reset() { data.clear(); }
-    auto hash() const { return data.hash(); }
-    bool operator==(const DynamicBoxes& o) const { return data == o.data; }
-    bool contains(const DynamicBoxes& o) const { return data.contains(o.data); }
+    size_t hash() const { return ::hash(data); }
+    bool operator==(const DynamicBoxes& o) const { return equal(data, o.data); }
+    bool contains(const DynamicBoxes& o) const { return ::contains(data, o.data); }
     template <typename Boxes>
     operator Boxes() const {
         Boxes out;
@@ -24,7 +47,7 @@ struct DynamicBoxes {
     }
 
    private:
-    Bits data;
+    std::vector<char> data;
 };
 
 template <int Words>
