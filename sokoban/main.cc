@@ -28,7 +28,7 @@ const cspan<string_view> Blacklist = {
 
 constexpr string_view prefix = "sokoban/levels/";
 
-constexpr bool kAnimateSolution = true;
+constexpr bool kAnimateSolution = false;
 
 string Solve(string_view file) {
     Timestamp start_ts;
@@ -67,12 +67,12 @@ string Solve(string_view file) {
             fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
             if (kAnimateSolution) {
                 env.Print();
-                std::this_thread::sleep_for(125ms);
+                std::this_thread::sleep_for(100ms);
                 env.Unprint();
                 for (const int2 delta : solution.first) {
                     env.Action(delta);
                     env.Print();
-                    std::this_thread::sleep_for(125ms);
+                    std::this_thread::sleep_for(100ms);
                     env.Unprint();
                 }
                 if (!env.IsSolved()) THROW(runtime_error2, "not solved");
@@ -89,8 +89,7 @@ string Solve(string_view file) {
     sort(skipped, natural_less);
 
     string result;
-    // TODO .elapsed() uses %T custom format!
-    result += fmt::format("solved {}/{} in {}", completed, total, start_ts.elapsed());
+    result += fmt::format("solved {}/{} in {:.3f}", completed, total, start_ts.elapsed_s());
     result += fmt::format(" unsolved {}", unsolved);
     result += fmt::format(" skipped {}", skipped);
     return result;
