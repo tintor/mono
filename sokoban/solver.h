@@ -6,6 +6,6 @@
 
 using Solution = std::vector<DynamicState>;
 
-std::pair<std::vector<int2>, int> Solve(LevelEnv env);
+std::pair<std::vector<int2>, int> Solve(LevelEnv env, int verbosity);
 
 void GenerateDeadlocks(const Level* level);

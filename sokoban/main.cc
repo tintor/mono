@@ -32,7 +32,7 @@ constexpr string_view prefix = "sokoban/levels/";
 
 constexpr bool kAnimateSolution = false;
 
-string Solve(string_view file) {
+string Solve(string_view file, int verbosity) {
     Timestamp start_ts;
     atomic<int> total = 0;
     atomic<int> completed = 0;
@@ -63,7 +63,7 @@ string Solve(string_view file) {
         fmt::print("Level {}\n", name);
         LevelEnv env;
         env.Load(name);
-        const auto solution = Solve(env);
+        const auto solution = Solve(env, verbosity);
         if (!solution.first.empty()) {
             completed += 1;
             fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
@@ -116,12 +116,12 @@ int Main(cspan<string_view> args) {
     if (args.size() == 0) {
         vector<string> results;
         for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
-            results.emplace_back(Solve(file));
+            results.emplace_back(Solve(file, 2));
         for (auto result : results) fmt::print("{}\n", result);
         return 0;
     }
     if (args.size() == 1) {
-        fmt::print("{}\n", Solve(args[0]));
+        fmt::print("{}\n", Solve(args[0], 2));
         return 0;
     }
     return 0;

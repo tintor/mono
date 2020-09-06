@@ -331,7 +331,7 @@ struct Solver {
                 queue.reset();
                 auto result = solve(candidate, 0, false /*pre_normalize*/);
                 if (result.has_value()) {
-                    for (const State& p : solution(*result)) solvable.insert(p);
+                    for (const State& p : solution(*result, 2)) solvable.insert(p);
                 } else {
                     Print(level, candidate);
                     new_deadlocks.push_back(candidate);
@@ -640,7 +640,8 @@ struct Solver {
         return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
     }
 
-    Solution solution(pair<State, StateInfo> s) {
+    Solution solution(pair<State, StateInfo> s, int verbosity) {
+        Timestamp ts;
         vector<DynamicState> result;
         while (true) {
             result.push_back(s.first);
@@ -659,20 +660,22 @@ struct Solver {
                 }
             }
         }
+        Timestamp te;
+        if (verbosity > 0) print("solution extracted in {:.3f} sec\n", ts.elapsed_s(te));
         return result;
     }
 };
 
 template <typename Boxes>
-Solution InternalSolve(const Level* level) {
-    PrintInfo(level);
+Solution InternalSolve(const Level* level, int verbosity) {
+    if (verbosity > 0) PrintInfo(level);
     Solver<TState<Boxes>> solver(level);
-    auto solution = solver.solve(level->start, 2);
-    if (solution) return solver.solution(*solution);
+    auto solution = solver.solve(level->start, verbosity);
+    if (solution) return solver.solution(*solution, verbosity);
     return {};
 }
 
-Solution Solve(const Level* level) {
+Solution Solve(const Level* level, int verbosity) {
 #ifdef OPTIMIZE_MEMORY
     const int dense_size = (level->num_alive + 31) / 32;
 
@@ -681,7 +684,7 @@ Solution Solve(const Level* level) {
 
     if (dense_size <= sparse_size && dense_size <= 32) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) return InternalSolve<DenseBoxes<32 * N>>(level)
+    if (level->num_alive <= 32 * N) return InternalSolve<DenseBoxes<32 * N>>(level, verbosity)
         DENSE(1);
         DENSE(2);
         DENSE(3);
@@ -696,7 +699,7 @@ Solution Solve(const Level* level) {
 
     if (level->num_alive < 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 4 * N) return InternalSolve<SparseBoxes<uchar, 4 * N>>(level)
+    if (level->num_boxes <= 4 * N) return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity)
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -706,7 +709,7 @@ Solution Solve(const Level* level) {
 
     if (level->num_alive < 256 * 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 2 * N) return InternalSolve<SparseBoxes<ushort, 2 * N>>(level)
+    if (level->num_boxes <= 2 * N) return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity)
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -721,7 +724,7 @@ Solution Solve(const Level* level) {
 
     THROW(not_implemented);
 #else
-    return InternalSolve<DynamicBoxes>(level);
+    return InternalSolve<DynamicBoxes>(level, verbosity);
 #endif
 }
 
@@ -769,11 +772,12 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
 }
 
 // Returns steps as deltas and number of pushes.
-pair<vector<int2>, int> Solve(LevelEnv env) {
+pair<vector<int2>, int> Solve(LevelEnv env, int verbosity) {
     auto level = LoadLevel(env);
-    auto pushes = Solve(level);
+    auto pushes = Solve(level, verbosity);
     if (pushes.empty()) return {};
 
+    Timestamp ts;
     vector<int2> steps;
     for (int2 step : level->initial_steps) {
         if (!env.Action(step)) THROW(runtime_error, "initial step failed");
@@ -785,7 +789,9 @@ pair<vector<int2>, int> Solve(LevelEnv env) {
         ExtractMoves(level, env, pushes[i], steps);
     }
     if (!env.IsSolved()) THROW(runtime_error, "not solved!");
-    return {steps, pushes.size()};
+    Timestamp te;
+    if (verbosity > 0) print("solution verified in {:.3f} sec\n", ts.elapsed_s(te));
+    return {std::move(steps), pushes.size()};
 }
 
 template <typename Cell>
