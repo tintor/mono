@@ -13,18 +13,20 @@
 #include "core/timestamp.h"
 using namespace std;
 
-const cspan<string_view> Blacklist = {
+const std::vector<string_view> Blacklist = {
     "original:24",    // syntax?
     "microban2:131",  // takes 15+ minutes
-    "microban2:132",  // large maze with one block
     "microban3:47",   // takes 2+ hours
     "microban3:58",   // takes 10+ minutes
     "microban4:75",   // takes 1+ hours
     "microban4:85",   // takes 1.5+ hours
-    "microban4:92",   // deadlocks easily
     "microban4:96",   // takes .5+ hours
     "microban5:26",
 };
+
+bool Blacklisted(string_view name) {
+    return contains(Blacklist, name);
+}
 
 constexpr string_view prefix = "sokoban/levels/";
 
@@ -45,12 +47,12 @@ string Solve(string_view file) {
     } else {
         auto num = NumberOfLevels(cat(prefix, file));
         for (int i = 1; i <= num; i++) {
-            string name = fmt::format("{}{}:{}", prefix, file, i);
-            if (contains(Blacklist, string_view(name))) {
+            string name = fmt::format("{}:{}", file, i);
+            if (Blacklisted(name)) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
             }
-            levels.push_back(name);
+            levels.push_back(fmt::format("{}{}", prefix, name));
         }
     }
 

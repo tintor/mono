@@ -66,7 +66,7 @@ struct StateMap {
 
     bool contains(const State& s, int shard) { return data[shard].find(s) != data[shard].end(); }
 
-    StateInfo get(const State& s, int shard) { return data[shard][s]; }
+    StateInfo get(const State& s, int shard) { return data[shard].at(s); }
 
     StateInfo* query(const State& s, int shard) {
         auto& d = data[shard];
@@ -771,7 +771,7 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
 // Returns steps as deltas and number of pushes.
 pair<vector<int2>, int> Solve(LevelEnv env) {
     auto level = LoadLevel(env);
-    auto pushes = InternalSolve<DynamicBoxes>(level);
+    auto pushes = Solve(level);
     if (pushes.empty()) return {};
 
     vector<int2> steps;

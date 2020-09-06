@@ -23,10 +23,8 @@ inline bool contains(const std::vector<char>& a, const std::vector<char>& b) {
 }
 
 inline size_t hash(const std::vector<char>& a) {
-    size_t m = 0;
-    for (size_t i = 0; i < a.size(); i++) if (a[i]) m = i;
     size_t hash = 0;
-    for (size_t i = 0; i < a.size(); i++) if (a[i]) hash ^= 1 << (i % 64);
+    for (size_t i = 0; i < a.size(); i++) if (a[i]) hash ^= size_t(1) << (i % 64);
     return hash;
 }
 
@@ -202,5 +200,13 @@ struct StateInfo {
     char dir = -1;
     bool closed = false;
     short prev_agent = -1;
+
+    bool operator==(const StateInfo& o) const {
+        return distance == o.distance && heuristic == o.heuristic && dir == o.dir && closed == o.closed && prev_agent == o.prev_agent; // && prev == o.prev;
+    }
+
+    void print() const {
+        fmt::print("distance {}, heuristic {}, dir {}, closed {}, prev_agent {}\n", distance, heuristic, int(dir), closed, prev_agent);
+    }
 };
 static_assert(sizeof(StateInfo) == 8);
