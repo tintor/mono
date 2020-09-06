@@ -708,7 +708,6 @@ struct Solver {
             }
         }
         Timestamp te;
-        if (verbosity > 0) print("solution extracted in {:.3f} sec\n", ts.elapsed_s(te));
         return result;
     }
 };
@@ -837,7 +836,6 @@ pair<vector<int2>, int> Solve(LevelEnv env, int verbosity) {
     }
     if (!env.IsSolved()) THROW(runtime_error, "not solved!");
     Timestamp te;
-    if (verbosity > 0) print("solution verified in {:.3f} sec\n", ts.elapsed_s(te));
     return {std::move(steps), pushes.size()};
 }
 
