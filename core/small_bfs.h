@@ -16,6 +16,7 @@ class small_queue {
     T pop() { return _data[_head++]; }
     void clear() { _head = _tail = 0; }
     uint tail() const { return _tail; }
+    T& first() { return _data[_head]; }
 
    private:
     std::vector<T> _data;

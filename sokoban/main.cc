@@ -115,7 +115,7 @@ int Main(cspan<string_view> args) {
     }
     if (args.size() == 0) {
         vector<string> results;
-        for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
+        for (auto file : {"microban1", "microban2", "microban3"}) //, "microban4", "microban5"})
             results.emplace_back(Solve(file, 2));
         for (auto result : results) fmt::print("{}\n", result);
         return 0;

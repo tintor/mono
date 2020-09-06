@@ -217,7 +217,7 @@ bool contains_frozen_boxes(const Cell* agent, Boxes boxes, const int num_goals, 
 
             // agent pushes box from B to C (and box disappears)
             if (--num_boxes == 1) return false;
-            visitor.clear();  // TODO is this strictly necessary?
+            visitor.clear();  // Necessary for edge cases.
             visitor.add(b, b->id);
             break;
         }

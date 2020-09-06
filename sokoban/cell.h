@@ -2,6 +2,9 @@
 #include "core/numeric.h"
 
 struct Level;
+struct Cell;
+
+using Exits = std::vector<std::tuple<const Cell*, const Cell*, int>>;
 
 struct Cell {
     const Level* level;
@@ -10,6 +13,9 @@ struct Cell {
     bool goal;
     bool sink;
     bool alive;
+
+    int dead_region_id; // if alive then same as id, otherwise min id of all cells in dead region
+    Exits exits;
 
     std::array<Cell*, 4> _dir;
     Cell* dir(int d) const { return _dir[d & 3]; }

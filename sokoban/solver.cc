@@ -246,7 +246,39 @@ struct Counters {
     }
 };
 
-const static uint kConcurrency = std::thread::hardware_concurrency();
+const static uint kConcurrency = 1; //std::thread::hardware_concurrency();
+
+class AgentVisitor : public each<AgentVisitor> {
+private:
+    int pos = 0;
+    small_queue<const Exits*> queue;
+    std::vector<uchar> visited;  // avoid slower vector<bool> as it is bit compressed!
+
+public:
+    AgentVisitor(uint capacity) : queue(capacity) { visited.resize(capacity, 0); }
+
+    void clear() {
+        queue.clear();
+        for (auto& e : visited) e = 0;
+    }
+
+    bool add(const Cell* a) {
+        if (visited[a->dead_region_id]) return false;
+        queue.push(&a->exits);
+        visited[a->dead_region_id] = 1;
+        return true;
+    }
+
+    std::optional<std::tuple<const Cell*, const Cell*, int>> next() {
+        if (!queue) return std::nullopt;
+        if (pos == queue.first()->size()) {
+            pos = 0;
+            queue.pop();
+            if (!queue) return std::nullopt;
+        }
+        return (*queue.first())[pos++];
+    }
+};
 
 template <typename State>
 struct Solver {
@@ -482,7 +514,12 @@ struct Solver {
 
         parallel(kConcurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
+//#define AGENT_VISITOR
+#ifdef AGENT_VISITOR
+            AgentVisitor agent_visitor(level->cells.size());
+#else
             small_bfs<const Cell*> agent_visitor(level->cells.size());
+#endif
             small_bfs<const Cell*> tmp_visitor(level->cells.size());
             Corrals<State> corrals(level);
 
@@ -510,11 +547,18 @@ struct Solver {
                 q.corral_ticks += corral_ts.elapsed();
 
                 agent_visitor.clear();
+#ifdef AGENT_VISITOR
+                agent_visitor.add(level->cells[s.agent]/*, s.agent*/);
+                for (auto [a, d, b] : agent_visitor) {
+                        if (!s.boxes[b->id]) {
+                            agent_visitor.add(b/*, b->id*/);
+#else
                 agent_visitor.add(level->cells[s.agent], s.agent);
                 for (const Cell* a : agent_visitor) {
                     for (auto [d, b] : a->moves) {
                         if (!s.boxes[b->id]) {
                             agent_visitor.add(b, b->id);
+#endif
                             continue;
                         }
                         // push
@@ -556,7 +600,7 @@ struct Solver {
                         StateInfo* qs = states.query(ns, shard);
                         if (qs) {
                             q.duplicates += 1;
-                            if (true /*not looking for minimal solution*/ || si.distance + 1 >= qs->distance) {
+                            if (si.distance + 1 >= qs->distance) {
                                 // existing state
                                 states.unlock(shard);
                             } else {
@@ -609,7 +653,9 @@ struct Solver {
                             if (!result) result = pair<State, StateInfo>{ns, nsi};
                             return;
                         }
+#ifndef AGENT_VISITOR
                     }
+#endif
                 }
             }
         });
