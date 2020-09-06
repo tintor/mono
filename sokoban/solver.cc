@@ -547,6 +547,69 @@ struct Solver {
         });
     }
 
+    void Monitor(int verbosity, mutex& result_lock, const Timestamp& start_ts) {
+        Corrals<State> corrals(level);
+        bool running = verbosity > 0;
+        if (!running) return;
+
+        while (running) {
+            if (!queue.wait_while_running_for(5s)) running = false;
+            long seconds = std::lround(start_ts.elapsed_s());
+            if (seconds < 4 && running) continue;
+
+            auto total = states.size();
+            auto open = queue.size();
+            auto closed = (total >= open) ? total - open : 0;
+
+            lock_guard g(result_lock);
+            print("states {} ({} {} {:.1f})\n", total, closed, open, 100. * open / total);
+
+            Counters q;
+            for (const Counters& c : counters) q.add(c);
+            ulong else_ticks = q.total_ticks;
+            else_ticks -= q.queue_pop_ticks;
+            else_ticks -= q.corral_ticks;
+            else_ticks -= q.corral2_ticks;
+            else_ticks -= q.is_simple_deadlock_ticks;
+            else_ticks -= q.is_reversible_push_ticks;
+            else_ticks -= q.contains_frozen_boxes_ticks;
+            else_ticks -= q.norm_ticks;
+            else_ticks -= q.states_query_ticks;
+            else_ticks -= q.heuristic_ticks;
+            else_ticks -= q.state_insert_ticks;
+            else_ticks -= q.queue_push_ticks;
+
+            print(
+                "elapsed {} ({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, "
+                "is_simple_deadlock {:.1f}, is_reversible_push {:.1f}, contains_frozen_boxes {:.1f}, "
+                "norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, "
+                "state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
+                seconds, Sec(q.total_ticks), Sec(q.queue_pop_ticks), Sec(q.corral_ticks), Sec(q.corral2_ticks),
+                Sec(q.is_simple_deadlock_ticks), Sec(q.is_reversible_push_ticks), Sec(q.contains_frozen_boxes_ticks), Sec(q.norm_ticks),
+                Sec(q.states_query_ticks), Sec(q.heuristic_ticks), Sec(q.state_insert_ticks), Sec(q.queue_push_ticks), Sec(else_ticks));
+            print("deadlocks (simple {}, frozen_box {}, heuristic {})", q.simple_deadlocks, q.frozen_box_deadlocks,
+                  q.heuristic_deadlocks);
+            print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
+            print(", locks ({} {}", states.overhead, states.overhead2);
+            print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
+            // states.print_sizes();
+            if (verbosity >= 2) {
+                auto ss = queue.top();
+                if (ss.has_value()) {
+                    State s = ss->first;
+
+                    int shard = StateMap<State>::shard(s);
+                    states.lock(shard);
+                    StateInfo* q = states.query(s, shard);
+                    states.unlock(shard);
+                    print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
+                    corrals.find_unsolved_picorral(s);
+                    PrintWithCorral(s, corrals.opt_picorral());
+                }
+            }
+        }
+    }
+
     optional<pair<State, StateInfo>> solve(State start, int verbosity = 0, bool pre_normalize = true) {
         if (kConcurrency == 1) print("Warning: Single-threaded!\n");
         Timestamp start_ts;
@@ -560,68 +623,7 @@ struct Solver {
         mutex result_lock;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([verbosity, this, &result_lock, start_ts]() {
-            Corrals<State> corrals(level);
-            bool running = verbosity > 0;
-            if (!running) return;
-
-            while (running) {
-                if (!queue.wait_while_running_for(5s)) running = false;
-                long seconds = std::lround(start_ts.elapsed_s());
-                if (seconds < 4 && running) continue;
-
-                auto total = states.size();
-                auto open = queue.size();
-                auto closed = (total >= open) ? total - open : 0;
-
-                lock_guard g(result_lock);
-                print("states {} ({} {} {:.1f})\n", total, closed, open, 100. * open / total);
-
-                Counters q;
-                for (const Counters& c : counters) q.add(c);
-                ulong else_ticks = q.total_ticks;
-                else_ticks -= q.queue_pop_ticks;
-                else_ticks -= q.corral_ticks;
-                else_ticks -= q.corral2_ticks;
-                else_ticks -= q.is_simple_deadlock_ticks;
-                else_ticks -= q.is_reversible_push_ticks;
-                else_ticks -= q.contains_frozen_boxes_ticks;
-                else_ticks -= q.norm_ticks;
-                else_ticks -= q.states_query_ticks;
-                else_ticks -= q.heuristic_ticks;
-                else_ticks -= q.state_insert_ticks;
-                else_ticks -= q.queue_push_ticks;
-
-                print(
-                    "elapsed {} ({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, "
-                    "is_simple_deadlock {:.1f}, is_reversible_push {:.1f}, contains_frozen_boxes {:.1f}, "
-                    "norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, "
-                    "state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
-                    seconds, Sec(q.total_ticks), Sec(q.queue_pop_ticks), Sec(q.corral_ticks), Sec(q.corral2_ticks),
-                    Sec(q.is_simple_deadlock_ticks), Sec(q.is_reversible_push_ticks), Sec(q.contains_frozen_boxes_ticks), Sec(q.norm_ticks),
-                    Sec(q.states_query_ticks), Sec(q.heuristic_ticks), Sec(q.state_insert_ticks), Sec(q.queue_push_ticks), Sec(else_ticks));
-                print("deadlocks (simple {}, frozen_box {}, heuristic {})", q.simple_deadlocks, q.frozen_box_deadlocks,
-                      q.heuristic_deadlocks);
-                print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
-                print(", locks ({} {}", states.overhead, states.overhead2);
-                print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
-                // states.print_sizes();
-                if (verbosity >= 2) {
-                    auto ss = queue.top();
-                    if (ss.has_value()) {
-                        State s = ss->first;
-
-                        int shard = StateMap<State>::shard(s);
-                        states.lock(shard);
-                        StateInfo* q = states.query(s, shard);
-                        states.unlock(shard);
-                        print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
-                        corrals.find_unsolved_picorral(s);
-                        PrintWithCorral(s, corrals.opt_picorral());
-                    }
-                }
-            }
-        });
+        std::thread monitor([verbosity, this, &result_lock, start_ts]() { Monitor(verbosity, result_lock, start_ts); });
 
         parallel(kConcurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
