@@ -6,7 +6,6 @@
 
 #include "sokoban/cell.h"
 #include "sokoban/state.h"
-#include "sokoban/util.h"
 
 struct Level {
     int width;            // for printing only

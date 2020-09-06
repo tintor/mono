@@ -28,6 +28,12 @@ cc_library(
 )
 
 cc_library(
+    name = "frozen_boxes",
+    hdrs = ["frozen_boxes.h"],
+    deps = [":level", ":util"],
+)
+
+cc_library(
     name = "corrals",
     hdrs = ["corrals.h"],
     srcs = ["corrals.cc"],
@@ -39,7 +45,7 @@ cc_library(
     hdrs = ["solver.h"],
     srcs = ["solver.cc"],
     deps = [
-        ":hungarian", ":corrals", ":level", ":level_env", ":state",
+        ":hungarian", ":corrals", ":level", ":level_env", ":state", ":frozen_boxes",
         "//core:timestamp", "//core:thread", "//core:array_deque", "//core:bits", "//core:range", "//core:small_bfs", "//core:string",
         "@fmt", "@absl//absl/container:flat_hash_set",
     ],
