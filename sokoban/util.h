@@ -189,8 +189,8 @@ bool is_reversible_push(const Cell* agent, const Boxes& boxes, int dir, small_bf
 template <typename Boxes>
 bool contains_frozen_boxes(const Cell* agent, Boxes boxes, const int num_goals, const int num_alive,
                            small_bfs<const Cell*>& visitor) {
+    // Fast-path
     int num_boxes = num_goals;
-
     visitor.clear();
     visitor.add(agent, agent->id);
 
@@ -217,9 +217,45 @@ bool contains_frozen_boxes(const Cell* agent, Boxes boxes, const int num_goals, 
 
             // agent pushes box from B to C (and box disappears)
             if (--num_boxes == 1) return false;
-            visitor.clear();  // Necessary for edge cases.
             visitor.add(b, b->id);
-            break;
+        }
+
+    // No frozen boxes if all remaining boxes are on goals
+    bool hit = false;
+    for (uint i = num_goals; i < num_alive; i++)
+        if (boxes[i]) { hit = true; break; }
+    if (!hit) return false;
+
+    // Slow-path
+    visitor.clear();
+    visitor.add(agent, agent->id);
+
+    for (const Cell* a : visitor)
+        for (auto [d, b] : a->moves) {
+            if (visitor.visited[b->id]) continue;
+            if (!boxes[b->id]) {
+                // agent moves to B
+                visitor.add(b, b->id);
+                continue;
+            }
+
+            const Cell* c = b->dir(d);
+            if (!c || !c->alive || boxes[c->id]) continue;
+
+            boxes.reset(b->id);
+            boxes.set(c->id);
+            bool m = is_simple_deadlock(c, boxes);
+            boxes.reset(c->id);
+            if (m) {
+                boxes.set(b->id);
+                continue;
+            }
+
+            // agent pushes box from B to C (and box disappears)
+            if (--num_boxes == 1) return false;
+            visitor.clear();  // <-- Necessary for edge cases.
+            visitor.add(b, b->id);
+            break; // <-- Necesary for edge cases.
         }
 
     // deadlock if any remaining box isn't on goal
