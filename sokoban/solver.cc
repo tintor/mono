@@ -246,7 +246,7 @@ struct Counters {
     }
 };
 
-const static uint kConcurrency = 1; //std::thread::hardware_concurrency();
+const static uint kConcurrency = std::thread::hardware_concurrency();
 
 class AgentVisitor : public each<AgentVisitor> {
 private:
@@ -438,6 +438,7 @@ struct Solver {
     }
 
     optional<pair<State, StateInfo>> solve(State start, int verbosity = 0, bool pre_normalize = true) {
+        if (kConcurrency == 1) print("Warning: Single-threaded!\n");
         Timestamp start_ts;
         if (pre_normalize) normalize(start, visitor);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
