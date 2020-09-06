@@ -1,5 +1,4 @@
 build --repo_env=CC=clang
-build:opt --repo_env=CC=clang
 
 build --copt -Werror
 
@@ -12,5 +11,5 @@ build --cxxopt=-mfma
 build --cxxopt=-ffast-math
 build --cxxopt=-ffp-contract=fast
 
-build:opt --cxxopt=-O3
-build:opt --cxxopt=-DNDEBUG
+build --cxxopt=-O3
+build --cxxopt=-DNDEBUG

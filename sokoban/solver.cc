@@ -17,6 +17,8 @@
 
 #include "absl/container/flat_hash_set.h"
 
+#include <shared_mutex>
+
 using namespace std::chrono_literals;
 using std::nullopt;
 using std::vector;
@@ -29,6 +31,113 @@ using std::optional;
 using absl::flat_hash_map;
 using absl::flat_hash_set;
 using fmt::print;
+
+class DeadlockDB {
+    using Word = uint;
+    constexpr static int WordBits = sizeof(Word) * 8;
+
+public:
+    DeadlockDB(const Level* level)
+        : _level(level)
+        , _num_alive(level->alive().size())
+        , _agent_words((_level->cells.size() + WordBits - 1) / WordBits)
+        , _box_words((_num_alive + WordBits - 1) / WordBits) {
+        _words.reserve((_agent_words + _box_words) * 64);
+    }
+
+    template <typename State>
+    bool ContainsPattern(const State& s) {
+        array<Word, 100> boxes_static;
+        vector<Word> boxes_dynamic;
+        Word* boxes;
+        if (_num_alive <= boxes_static.size()) {
+            boxes = boxes_static.data();
+        } else {
+            boxes_dynamic.resize(_num_alive, 0);
+            boxes = boxes_dynamic.data();
+        }
+
+        std::fill(boxes, boxes + _box_words, 0);
+        for (int i = 0; i < _num_alive; i++) {
+            if (s.boxes[i]) AddBit(boxes, i);
+        }
+
+        _mutex.lock_shared();
+        const Word* end = _words.data() + _words.size();
+        for (const Word* p = _words.data(); p < end; p += _agent_words + _box_words) {
+            if (!MatchesPattern(s.agent, boxes, p)) continue;
+            _mutex.unlock_shared();
+            return true;
+        }
+        _mutex.unlock_shared();
+        return false;
+    }
+
+    // Note: Pattern must be minimal and not already in database.
+    template <typename State>
+    void AddPattern(const State& s) {
+        if (ContainsPattern(s)) THROW(runtime_error, "duplicate deadlock pattern");
+        _mutex.lock();
+        _words.resize(_words.size() + _agent_words + _box_words);
+        WritePattern(s, _words.data() + _words.size() - _agent_words - _box_words);
+        _mutex.unlock();
+        if (!ContainsPattern(s)) THROW(runtime_error, "pattern not stored");
+    }
+
+private:
+    bool MatchesPattern(const int agent, const Word* boxes, const Word* p) {
+        if (!HasBit(p, agent)) return false;
+
+        const Word* pb = p + _agent_words;
+        for (int i = 0; i < _box_words; i++) {
+            if ((boxes[i] | pb[i]) != boxes[i]) return false;
+        }
+        return true;
+    }
+
+    template <typename State>
+    void WritePattern(const State& s, Word* p) {
+        std::fill(p, p + _agent_words + _box_words, 0);
+
+        // Agent part
+        small_bfs<const Cell*> visitor(_level->cells.size());
+        visitor.add(_level->cells[s.agent], s.agent);
+        for (const Cell* a : visitor) {
+            AddBit(p, a->id);
+            for (auto [_, b] : a->moves) {
+                if (!s.boxes[b->id]) visitor.add(b, b->id);
+            }
+        }
+
+        // Box part
+        for (int i = 0; i < _num_alive; i++) {
+            if (s.boxes[i]) AddBit(p + _agent_words, i);
+        }
+
+        print("New deadlock pattern:\n");
+        Print(_level, s, [&](const Cell* e) {
+            if (HasBit(p, e->id)) return "▫️ ";
+            if (e->id < _num_alive && HasBit(p + _agent_words, e->id)) return "🔵";
+            return "  ";
+        });
+    }
+
+    static bool HasBit(const Word* p, int index) {
+        return p[index / WordBits] & (Word(1) << (index & WordBits));
+    }
+
+    static void AddBit(Word* p, int index) {
+        p[index / WordBits] |= Word(1) << (index % WordBits);
+    }
+
+    const Level* _level;
+    const int _num_alive;
+    const int _agent_words;
+    const int _box_words;
+
+    std::shared_mutex _mutex;
+    vector<Word> _words;
+};
 
 double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
 
@@ -290,8 +399,9 @@ struct Solver {
     vector<Counters> counters;
     small_bfs<const Cell*> visitor;
     Boxes goals;
+    DeadlockDB deadlock_db;
 
-    Solver(const Level* level) : level(level), queue(kConcurrency), visitor(level->cells.size()) {
+    Solver(const Level* level) : level(level), queue(kConcurrency), visitor(level->cells.size()), deadlock_db(level) {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
