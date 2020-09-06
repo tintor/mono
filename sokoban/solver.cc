@@ -73,14 +73,16 @@ public:
         return false;
     }
 
-    // Note: Pattern must be minimal and not already in database.
     template <typename State>
     void AddPattern(const State& s) {
-        if (ContainsPattern(s)) THROW(runtime_error, "duplicate deadlock pattern");
+        std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
+        if (ContainsPattern(s)) return;
+
         _mutex.lock();
-        _words.resize(_words.size() + _agent_words + _box_words);
+        _words.resize(_words.size() + _agent_words + _box_words, 0);
         WritePattern(s, _words.data() + _words.size() - _agent_words - _box_words);
         _mutex.unlock();
+
         if (!ContainsPattern(s)) THROW(runtime_error, "pattern not stored");
     }
 
@@ -97,8 +99,6 @@ private:
 
     template <typename State>
     void WritePattern(const State& s, Word* p) {
-        std::fill(p, p + _agent_words + _box_words, 0);
-
         // Agent part
         small_bfs<const Cell*> visitor(_level->cells.size());
         visitor.add(_level->cells[s.agent], s.agent);
@@ -111,19 +111,21 @@ private:
 
         // Box part
         for (int i = 0; i < _num_alive; i++) {
-            if (s.boxes[i]) AddBit(p + _agent_words, i);
+            if (s.boxes[i]) {
+                AddBit(p + _agent_words, i);
+            }
         }
 
-        print("New deadlock pattern:\n");
-        Print(_level, s, [&](const Cell* e) {
-            if (HasBit(p, e->id)) return "▫️ ";
+        /*Print(_level, s, [this, p](const Cell* e) {
             if (e->id < _num_alive && HasBit(p + _agent_words, e->id)) return "🔵";
+            if (!HasBit(p, e->id)) return "▫️ ";
             return "  ";
-        });
+        });*/
     }
 
     static bool HasBit(const Word* p, int index) {
-        return p[index / WordBits] & (Word(1) << (index & WordBits));
+        const Word mask = Word(1) << (index % WordBits);
+        return (p[index / WordBits] & mask) != 0;
     }
 
     static void AddBit(Word* p, int index) {
@@ -135,6 +137,7 @@ private:
     const int _agent_words;
     const int _box_words;
 
+    std::mutex _add_mutex;
     std::shared_mutex _mutex;
     vector<Word> _words;
 };
@@ -389,6 +392,12 @@ public:
     }
 };
 
+template <typename T>
+struct Protected {
+    T _data;
+    mutex _mutex;
+};
+
 template <typename State>
 struct Solver {
     using Boxes = typename State::Boxes;
@@ -471,7 +480,7 @@ struct Solver {
             if (!solvable.contains(candidate) && !contains_deadlock(candidate, deadlocks)) {
                 states.reset();
                 queue.reset();
-                auto result = solve(candidate, 0, false /*pre_normalize*/);
+                auto result = Solve(candidate, 0, false /*pre_normalize*/);
                 if (result.has_value()) {
                     for (const State& p : solution(*result, 2)) solvable.insert(p);
                 } else {
@@ -547,7 +556,7 @@ struct Solver {
         });
     }
 
-    void Monitor(int verbosity, mutex& result_lock, const Timestamp& start_ts) {
+    void Monitor(int verbosity, const Timestamp& start_ts) {
         Corrals<State> corrals(level);
         bool running = verbosity > 0;
         if (!running) return;
@@ -561,7 +570,6 @@ struct Solver {
             auto open = queue.size();
             auto closed = (total >= open) ? total - open : 0;
 
-            lock_guard g(result_lock);
             print("states {} ({} {} {:.1f})\n", total, closed, open, 100. * open / total);
 
             Counters q;
@@ -610,7 +618,113 @@ struct Solver {
         }
     }
 
-    optional<pair<State, StateInfo>> solve(State start, int verbosity = 0, bool pre_normalize = true) {
+    struct WorkerState {
+        small_bfs<const Cell*> tmp_visitor;
+        Corrals<State> corrals;
+        Counters* counters = nullptr;
+        Protected<optional<pair<State, StateInfo>>>* result = nullptr;
+
+        WorkerState(const Level* level) : tmp_visitor(level->cells.size()), corrals(level) {}
+    };
+
+    // Returns false is push is a deadlock.
+    bool EvaluatePush(const State& s, const StateInfo& si, const Cell* a, const Cell* b, const int d, WorkerState& ws) {
+        Counters& q = *ws.counters;
+        const Cell* c = b->dir(d);
+        if (!c || !c->alive || s.boxes[c->id]) return true;
+        if (ws.corrals.has_picorral() && !ws.corrals.picorral()[c->id]) {
+            q.corral_cuts += 1;
+            return true;
+        }
+        State ns(b->id, s.boxes);
+        ns.boxes.reset(b->id);
+        ns.boxes.set(c->id);
+
+        Timestamp deadlock_ts;
+        if (TIMER(is_simple_deadlock(c, ns.boxes), q.is_simple_deadlock_ticks)) {
+            q.simple_deadlocks += 1;
+            return false;
+        }
+        auto dd = d;
+        auto bb = b;
+        if (TIMER(!is_reversible_push(level->cells[ns.agent], ns.boxes, dd, ws.tmp_visitor),
+                  q.is_reversible_push_ticks) &&
+            TIMER(contains_frozen_boxes(bb, ns.boxes, level->num_goals, level->num_alive, ws.tmp_visitor),
+                  q.contains_frozen_boxes_ticks)) {
+            q.frozen_box_deadlocks += 1;
+            return false;
+        }
+
+        Timestamp norm_ts;
+        normalize(ns, ws.tmp_visitor);
+
+        Timestamp states_query_ts;
+        q.norm_ticks += norm_ts.elapsed(states_query_ts);
+
+        int shard = StateMap<State>::shard(ns);
+        states.lock(shard);
+
+        constexpr int Overestimate = 2;
+        StateInfo* qs = states.query(ns, shard);
+        if (qs) {
+            q.duplicates += 1;
+            if (si.distance + 1 >= qs->distance) {
+                // existing state
+                states.unlock(shard);
+            } else {
+                qs->dir = d;
+                qs->distance = si.distance + 1;
+                // no need to update heuristic
+                qs->prev_agent = a->id;
+                states.unlock(shard);
+                queue.push(ns, uint(qs->distance) + uint(qs->heuristic) * Overestimate);
+                q.updates += 1;
+            }
+            q.states_query_ticks += states_query_ts.elapsed();
+            return true;
+        }
+
+        // new state
+        StateInfo nsi;
+        nsi.dir = d;
+        nsi.distance = si.distance + 1;
+
+        Timestamp heuristic_ts;
+        q.states_query_ticks += states_query_ts.elapsed(heuristic_ts);
+
+        // TODO holding lock while computing heuristic!
+        uint h = heuristic(ns.boxes);
+        q.heuristic_ticks += heuristic_ts.elapsed();
+
+        if (h == Cell::Inf) {
+            states.unlock(shard);
+            q.heuristic_deadlocks += 1;
+            return false;
+        }
+        nsi.heuristic = h;
+
+        nsi.prev_agent = a->id;
+
+        Timestamp state_insert_ts;
+        states.add(ns, nsi, shard);
+        states.unlock(shard);
+
+        Timestamp queue_push_ts;
+        q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
+
+        queue.push(ns, int(nsi.distance) + int(nsi.heuristic) * Overestimate);
+        q.queue_push_ticks += queue_push_ts.elapsed();
+
+        if (goals.contains(ns.boxes)) {
+            queue.shutdown();
+            auto& result = *ws.result;
+            std::unique_lock<mutex> lock(result._mutex);
+            if (!result._data.has_value()) result._data = pair<State, StateInfo>{ns, nsi};
+        }
+        return true;
+    }
+
+    optional<pair<State, StateInfo>> Solve(State start, int verbosity = 0, bool pre_normalize = true) {
         if (kConcurrency == 1) print("Warning: Single-threaded!\n");
         Timestamp start_ts;
         if (pre_normalize) normalize(start, visitor);
@@ -619,11 +733,10 @@ struct Solver {
 
         if (start.boxes == goals) return pair<State, StateInfo>{start, StateInfo()};
 
-        optional<pair<State, StateInfo>> result;
-        mutex result_lock;
+        Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([verbosity, this, &result_lock, start_ts]() { Monitor(verbosity, result_lock, start_ts); });
+        std::thread monitor([verbosity, this, start_ts]() { Monitor(verbosity, start_ts); });
 
         parallel(kConcurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
@@ -633,8 +746,9 @@ struct Solver {
 #else
             small_bfs<const Cell*> agent_visitor(level->cells.size());
 #endif
-            small_bfs<const Cell*> tmp_visitor(level->cells.size());
-            Corrals<State> corrals(level);
+            WorkerState ws(level);
+            ws.result = &result;
+            ws.counters = &q;
 
             while (true) {
                 Timestamp queue_pop_ts;
@@ -656,124 +770,42 @@ struct Solver {
 
                 Timestamp corral_ts;
                 q.queue_pop_ticks += queue_pop_ts.elapsed(corral_ts);
-                corrals.find_unsolved_picorral(s);
+                ws.corrals.find_unsolved_picorral(s);
                 q.corral_ticks += corral_ts.elapsed();
 
                 agent_visitor.clear();
+                bool deadlock = true;
 #ifdef AGENT_VISITOR
                 agent_visitor.add(level->cells[s.agent]/*, s.agent*/);
                 for (auto [a, d, b] : agent_visitor) {
-                        if (!s.boxes[b->id]) {
-                            agent_visitor.add(b/*, b->id*/);
+                    if (!s.boxes[b->id]) {
+                        agent_visitor.add(b/*, b->id*/);
+                        continue;
+                    }
+                    if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
+                }
 #else
                 agent_visitor.add(level->cells[s.agent], s.agent);
                 for (const Cell* a : agent_visitor) {
                     for (auto [d, b] : a->moves) {
                         if (!s.boxes[b->id]) {
                             agent_visitor.add(b, b->id);
-#endif
                             continue;
                         }
-                        // push
-                        const Cell* c = b->dir(d);
-                        if (!c || !c->alive || s.boxes[c->id]) continue;
-                        if (corrals.has_picorral() && !corrals.picorral()[c->id]) {
-                            q.corral_cuts += 1;
-                            continue;
-                        }
-                        State ns(b->id, s.boxes);
-                        ns.boxes.reset(b->id);
-                        ns.boxes.set(c->id);
-
-                        Timestamp deadlock_ts;
-                        if (TIMER(is_simple_deadlock(c, ns.boxes), q.is_simple_deadlock_ticks)) {
-                            q.simple_deadlocks += 1;
-                            continue;
-                        }
-                        auto dd = d;
-                        auto bb = b;
-                        if (TIMER(!is_reversible_push(level->cells[ns.agent], ns.boxes, dd, tmp_visitor),
-                                  q.is_reversible_push_ticks) &&
-                            TIMER(contains_frozen_boxes(bb, ns.boxes, level->num_goals, level->num_alive, tmp_visitor),
-                                  q.contains_frozen_boxes_ticks)) {
-                            q.frozen_box_deadlocks += 1;
-                            continue;
-                        }
-
-                        Timestamp norm_ts;
-                        normalize(ns, tmp_visitor);
-
-                        Timestamp states_query_ts;
-                        q.norm_ticks += norm_ts.elapsed(states_query_ts);
-
-                        int shard = StateMap<State>::shard(ns);
-                        states.lock(shard);
-
-                        constexpr int Overestimate = 2;
-                        StateInfo* qs = states.query(ns, shard);
-                        if (qs) {
-                            q.duplicates += 1;
-                            if (si.distance + 1 >= qs->distance) {
-                                // existing state
-                                states.unlock(shard);
-                            } else {
-                                qs->dir = d;
-                                qs->distance = si.distance + 1;
-                                // no need to update heuristic
-                                qs->prev_agent = a->id;
-                                states.unlock(shard);
-                                queue.push(ns, uint(qs->distance) + uint(qs->heuristic) * Overestimate);
-                                q.updates += 1;
-                            }
-                            q.states_query_ticks += states_query_ts.elapsed();
-                            continue;
-                        }
-
-                        // new state
-                        StateInfo nsi;
-                        nsi.dir = d;
-                        nsi.distance = si.distance + 1;
-
-                        Timestamp heuristic_ts;
-                        q.states_query_ticks += states_query_ts.elapsed(heuristic_ts);
-
-                        // TODO holding lock while computing heuristic!
-                        uint h = heuristic(ns.boxes);
-                        q.heuristic_ticks += heuristic_ts.elapsed();
-
-                        if (h == Cell::Inf) {
-                            states.unlock(shard);
-                            q.heuristic_deadlocks += 1;
-                            continue;
-                        }
-                        nsi.heuristic = h;
-
-                        nsi.prev_agent = a->id;
-
-                        Timestamp state_insert_ts;
-                        states.add(ns, nsi, shard);
-                        states.unlock(shard);
-
-                        Timestamp queue_push_ts;
-                        q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
-
-                        queue.push(ns, int(nsi.distance) + int(nsi.heuristic) * Overestimate);
-                        q.queue_push_ticks += queue_push_ts.elapsed();
-
-                        if (goals.contains(ns.boxes)) {
-                            queue.shutdown();
-                            lock_guard g(result_lock);
-                            if (!result) result = pair<State, StateInfo>{ns, nsi};
-                            return;
-                        }
-#ifndef AGENT_VISITOR
+                        if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
                     }
+                }
 #endif
+                if (deadlock) {
+                    // Add (potentially non-minimal) deadlock pattern
+                    // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
+                    // TODO: if any reversible box is pushed, verify that resulting state is still a deadlock
+                    deadlock_db.AddPattern(s);
                 }
             }
         });
         monitor.join();
-        return result;
+        return result._data;
     }
 
     pair<State, StateInfo> previous(pair<State, StateInfo> p) {
@@ -828,7 +860,7 @@ template <typename Boxes>
 Solution InternalSolve(const Level* level, int verbosity) {
     if (verbosity > 0) PrintInfo(level);
     Solver<TState<Boxes>> solver(level);
-    auto solution = solver.solve(level->start, verbosity);
+    auto solution = solver.Solve(level->start, verbosity);
     if (solution) return solver.solution(*solution, verbosity);
     return {};
 }
