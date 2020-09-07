@@ -211,8 +211,6 @@ class StateQueue {
     std::condition_variable queue_push_cv;
 };
 
-const static uint kConcurrency = std::thread::hardware_concurrency();
-
 class XAgentVisitor : public each<XAgentVisitor> {
 private:
     int pos = 0;
@@ -255,6 +253,7 @@ template <typename State>
 struct Solver {
     using Boxes = typename State::Boxes;
 
+    const int concurrency;
     const Level* level;
     StateMap<State> states;
     StateQueue<State> queue;
@@ -262,7 +261,11 @@ struct Solver {
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
 
-    Solver(const Level* level) : level(level), queue(kConcurrency), deadlock_db(level) {
+    Solver(const Level* level, bool single_thread)
+            : concurrency(single_thread ? 1 : std::thread::hardware_concurrency())
+            , level(level)
+            , queue(concurrency)
+            , deadlock_db(level) {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
@@ -563,7 +566,7 @@ struct Solver {
     }
 
     optional<pair<State, StateInfo>> Solve(State start, int verbosity = 0, bool pre_normalize = true) {
-        if (kConcurrency == 1) print("Warning: Single-threaded!\n");
+        if (concurrency == 1) print("Warning: Single-threaded!\n");
         Timestamp start_ts;
         if (pre_normalize) normalize(start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
@@ -576,7 +579,7 @@ struct Solver {
         counters.resize(std::thread::hardware_concurrency());
         std::thread monitor([verbosity, this, start_ts]() { Monitor(verbosity, start_ts); });
 
-        parallel(kConcurrency, [&](size_t thread_id) {
+        parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
             AgentVisitor agent_visitor(level);
             WorkerState ws(level);
@@ -679,15 +682,15 @@ struct Solver {
 };
 
 template <typename Boxes>
-Solution InternalSolve(const Level* level, int verbosity) {
+Solution InternalSolve(const Level* level, int verbosity, bool single_thread) {
     if (verbosity > 0) PrintInfo(level);
-    Solver<TState<Boxes>> solver(level);
+    Solver<TState<Boxes>> solver(level, single_thread);
     auto solution = solver.Solve(level->start, verbosity);
     if (solution) return solver.solution(*solution, verbosity);
     return {};
 }
 
-Solution Solve(const Level* level, int verbosity) {
+Solution Solve(const Level* level, int verbosity, bool single_thread) {
 #ifdef OPTIMIZE_MEMORY
     const int dense_size = (level->num_alive + 31) / 32;
 
@@ -696,7 +699,7 @@ Solution Solve(const Level* level, int verbosity) {
 
     if (dense_size <= sparse_size && dense_size <= 32) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) return InternalSolve<DenseBoxes<32 * N>>(level, verbosity)
+    if (level->num_alive <= 32 * N) return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread)
         DENSE(1);
         DENSE(2);
         DENSE(3);
@@ -711,7 +714,7 @@ Solution Solve(const Level* level, int verbosity) {
 
     if (level->num_alive < 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 4 * N) return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity)
+    if (level->num_boxes <= 4 * N) return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity, single_thread)
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -721,7 +724,7 @@ Solution Solve(const Level* level, int verbosity) {
 
     if (level->num_alive < 256 * 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 2 * N) return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity)
+    if (level->num_boxes <= 2 * N) return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity, single_thread)
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -736,7 +739,7 @@ Solution Solve(const Level* level, int verbosity) {
 
     THROW(not_implemented);
 #else
-    return InternalSolve<DynamicBoxes>(level, verbosity);
+    return InternalSolve<DynamicBoxes>(level, verbosity, single_thread);
 #endif
 }
 
@@ -783,9 +786,9 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
 }
 
 // Returns steps as deltas and number of pushes.
-pair<vector<int2>, int> Solve(LevelEnv env, int verbosity) {
+pair<vector<int2>, int> Solve(LevelEnv env, int verbosity, bool single_thread) {
     auto level = LoadLevel(env);
-    auto pushes = Solve(level, verbosity);
+    auto pushes = Solve(level, verbosity, single_thread);
     if (pushes.empty()) return {};
 
     Timestamp ts;
@@ -805,20 +808,20 @@ pair<vector<int2>, int> Solve(LevelEnv env, int verbosity) {
 }
 
 template <typename Cell>
-void InternalGenerateDeadlocks(const Level* level) {
+void InternalGenerateDeadlocks(const Level* level, bool single_thread) {
     const int MaxBoxes = 4;
     Timestamp ts;
     using State = TState<DynamicBoxes>;
     // using State = TState<SparseBoxes<Cell, MaxBoxes>>;
-    Solver<State> solver(level);
+    Solver<State> solver(level, single_thread);
     vector<State> deadlocks;
     for (auto boxes : range(1, MaxBoxes + 1)) solver.generate_deadlocks(boxes, deadlocks);
     print("found deadlocks {} in {}\n", deadlocks.size(), ts.elapsed());
 }
 
-void GenerateDeadlocks(const Level* level) {
+void GenerateDeadlocks(const Level* level, bool single_thread) {
     if (level->num_alive < 256)
-        InternalGenerateDeadlocks<uchar>(level);
+        InternalGenerateDeadlocks<uchar>(level, single_thread);
     else
-        InternalGenerateDeadlocks<ushort>(level);
+        InternalGenerateDeadlocks<ushort>(level, single_thread);
 }

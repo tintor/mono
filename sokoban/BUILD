@@ -55,6 +55,10 @@ cc_library(
 cc_binary(
     name = "main",
     srcs = ["main.cc"],
-    deps = [":solver", "@fmt", "//core:vector", "//core:auto", "//core:bits", "//core:range", "//core:string", "//core:thread", "//core:timestamp"],
+    deps = [
+        ":solver",
+        "//core:vector", "//core:auto", "//core:bits", "//core:range", "//core:string", "//core:thread", "//core:timestamp",
+        "@fmt", "@boost//:program_options"
+    ],
     data = glob(["levels/**"]),
 )

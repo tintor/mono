@@ -9,6 +9,9 @@
 #include "core/thread.h"
 #include "core/timestamp.h"
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
 #include <filesystem>
 #include <iostream>
 #include <fstream>
@@ -25,9 +28,7 @@ const std::vector<string_view> Blacklist = {
     "microban5:26",
 };
 
-constexpr string_view prefix = "sokoban/levels/";
-
-constexpr bool kAnimateSolution = false;
+constexpr string_view kPrefix = "sokoban/levels/";
 
 constexpr string_view kSolvedPath = "/tmp/sokoban/solved";
 
@@ -40,7 +41,14 @@ void mark_level_solved(string_view name) {
     std::ofstream of(fmt::format("{}/{}", kSolvedPath, name), ios_base::app);
 }
 
-string Solve(string_view file, int verbosity, bool unsolved_only = false) {
+struct Options {
+    bool unsolved = false;
+    bool animate = false;
+    bool single_thread = false;
+    int verbosity = 2;
+};
+
+string Solve(string_view file, const Options& options) {
     Timestamp start_ts;
     atomic<int> total = 0;
     atomic<int> completed = 0;
@@ -53,14 +61,14 @@ string Solve(string_view file, int verbosity, bool unsolved_only = false) {
     if (file.find(":"sv) != string_view::npos) {
         levels.push_back(string(file));
     } else {
-        auto num = NumberOfLevels(cat(prefix, file));
+        auto num = NumberOfLevels(cat(kPrefix, file));
         for (int i = 1; i <= num; i++) {
             string name = fmt::format("{}:{}", file, i);
-            if (!unsolved_only && contains(Blacklist, string_view(name))) {
+            if (!options.unsolved && contains(Blacklist, string_view(name))) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
             }
-            if (unsolved_only && is_level_solved(name)) {
+            if (options.unsolved && is_level_solved(name)) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
             }
@@ -74,13 +82,13 @@ string Solve(string_view file, int verbosity, bool unsolved_only = false) {
 
         fmt::print("Level {}\n", name);
         LevelEnv env;
-        env.Load(fmt::format("{}{}", prefix, name));
-        const auto solution = Solve(env, verbosity);
+        env.Load(fmt::format("{}{}", kPrefix, name));
+        const auto solution = Solve(env, options.verbosity, options.single_thread);
         if (!solution.first.empty()) {
             completed += 1;
             fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
             mark_level_solved(name);
-            if (kAnimateSolution) {
+            if (options.animate) {
                 env.Print();
                 std::this_thread::sleep_for(100ms);
                 env.Unprint();
@@ -111,41 +119,51 @@ string Solve(string_view file, int verbosity, bool unsolved_only = false) {
     return result;
 }
 
-int Main(cspan<string_view> args) {
-    if (args.size() == 2 && args[0] == "--dbox2") {
-        auto level = LoadLevel(cat(prefix, args[1]));
+int main(int argc, char** argv) {
+    InitSegvHandler();
+    Timestamp::init();
+
+    Options options;
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("animate", po::bool_switch(&options.animate), "")
+        ("single-thread", po::bool_switch(&options.single_thread), "")
+        ("unsolved", po::bool_switch(&options.unsolved), "")
+        ("verbosity", po::value<int>(&options.verbosity), "")
+        ("deadlocks", po::value<string>(), "")
+        ("scan", po::value<string>(), "")
+        ("open", po::value<string>(), "")
+    ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("deadlocks")) {
+        auto level = LoadLevel(cat(kPrefix, vm["deadlocks"].as<string>()));
         PrintInfo(level);
-        GenerateDeadlocks(level);
+        GenerateDeadlocks(level, options.single_thread);
         return 0;
     }
-    if (args.size() == 2 && args[0] == "--scan") {
-        auto num = NumberOfLevels(cat(prefix, args[1]));
+
+    if (vm.count("scan")) {
+        auto num = NumberOfLevels(cat(kPrefix, vm["scan"].as<string>()));
         for (size_t i = 0; i < num; i++) {
-            string name = fmt::format("{}:{}", args[1], i + 1);
-            auto level = LoadLevel(cat(prefix, name));
+            string name = fmt::format("{}:{}", vm["scan"].as<string>(), i + 1);
+            auto level = LoadLevel(cat(kPrefix, name));
             if (level) PrintInfo(level);
         }
         return 0;
     }
-    if (args.size() == 0 || (args.size() == 1 && args[0] == "--unsolved")) {
-        vector<string> results;
-        for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
-            results.emplace_back(Solve(file, 2, args.size() == 1));
-        for (auto result : results) fmt::print("{}\n", result);
+
+    if (vm.count("open")) {
+        fmt::print("{}\n", Solve(vm["open"].as<string>(), options));
         return 0;
     }
-    if (args.size() == 1) {
-        fmt::print("{}\n", Solve(args[0], 2));
-        return 0;
-    }
+
+    vector<string> results;
+    for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
+        results.emplace_back(Solve(file, options));
+    for (auto result : results) fmt::print("{}\n", result);
     return 0;
-}
-
-int main(int argc, char** argv) {
-    InitSegvHandler();
-    // Timestamp::init();
-
-    vector<string_view> args;
-    for (int i = 1; i < argc; i++) args.push_back(argv[i]);
-    return Main(args);
 }
