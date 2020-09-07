@@ -25,7 +25,7 @@ cc_library(
     name = "level",
     hdrs = ["level.h"],
     srcs = ["level.cc"],
-    deps = [":level_env", ":util", "//core:range", "//core:array_deque", "//core:small_bfs"],
+    deps = [":level_env", ":util", "//core:vector", "//core:range", "//core:array_deque", "//core:small_bfs"],
 )
 
 cc_library(

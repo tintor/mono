@@ -3,6 +3,7 @@
 
 #include "core/exception.h"
 #include "core/small_bfs.h"
+#include "core/vector.h"
 
 #include "sokoban/cell.h"
 #include "sokoban/state.h"
@@ -34,6 +35,55 @@ struct Level {
     int2 cell_to_vec(const Cell* cell) const { return {cell->xy % width, cell->xy / width}; }
 };
 
+class AgentVisitor : public each<AgentVisitor> {
+private:
+    static constexpr int kCapacity = 1000;
+
+    static_vector<ushort, kCapacity> _queue;
+    static_vector<char, kCapacity> _visited;
+    int _head = 0;
+    int _tail = 0;
+    const Level* _level;
+
+public:
+    AgentVisitor(const Level* level) : _level(level) {
+        if (level->cells.size() > kCapacity) THROW(runtime_error, "level has more cells ({}) than capacity ({})", level->cells.size(), kCapacity);
+        _visited.resize(level->cells.size(), 0);
+    }
+
+    AgentVisitor(const Level* level, const int start) : AgentVisitor(level) {
+        _queue[_tail++] = start;
+        _visited[start] = 1;
+    }
+
+    AgentVisitor(const Cell* start) : AgentVisitor(start->level) {
+        _queue[_tail++] = start->id;
+        _visited[start->id] = 1;
+    }
+
+    bool visited(const int cell_id) const { return _visited[cell_id]; }
+    bool visited(const Cell* cell) const { return _visited[cell->id]; }
+
+    void clear() {
+        _head = _tail = 0;
+        std::fill(_visited.begin(), _visited.end(), 0);
+    }
+
+    bool add(const int cell_id) {
+        if (_visited[cell_id]) return false;
+        _queue[_tail++] = cell_id;
+        _visited[cell_id] = 1;
+        return true;
+    }
+
+    bool add(const Cell* cell) { return add(cell->id); }
+
+    std::optional<const Cell*> next() {
+        if (_head == _tail) return std::nullopt;
+        return _level->cells[_queue[_head++]];
+    }
+};
+
 inline Cell* GetCell(const Level* level, uint xy) {
     for (Cell* c : level->cells)
         if (c->xy == xy) return c;
@@ -62,8 +112,7 @@ std::string_view Emoji(const Level* level, Agent agent, const Boxes& boxes, uint
 
 template <typename State>
 void Print(const Level* level, const State& key, std::function<std::string_view(Cell*)> fn = [] LAMBDA("")) {
-    small_bfs<const Cell*> visitor(level->cells.size());
-    auto frozen = goals_with_frozen_boxes(level->cells[key.agent], key.boxes, level->goals(), visitor);
+    auto frozen = goals_with_frozen_boxes(level->cells[key.agent], key.boxes, level->goals());
     for (uint xy = 0; xy < level->buffer.size(); xy++) {
         std::cout << Emoji(level, key.agent, key.boxes, xy, frozen, fn);
         if (xy % level->width == level->width - 1) std::cout << std::endl;

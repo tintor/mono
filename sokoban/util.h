@@ -82,8 +82,7 @@ bool is_frozen_on_goal_simple(const Cell* box, const Boxes& boxes) {
 }
 
 template <typename Boxes>
-Boxes goals_with_frozen_boxes(const Cell* agent, const Boxes& boxes, cspan<Cell*> goals,
-                              small_bfs<const Cell*>& visitor) {
+Boxes goals_with_frozen_boxes(const Cell* agent, const Boxes& boxes, cspan<Cell*> goals) {
     Boxes frozen;
 
     // try simple approach first
@@ -101,15 +100,13 @@ Boxes goals_with_frozen_boxes(const Cell* agent, const Boxes& boxes, cspan<Cell*
     // iteratively remove all boxes that agent can push from its reachable area
     frozen = boxes;
     int num_boxes = goals.size();
-    visitor.clear();
-    visitor.add(agent, agent->id);
-
+    AgentVisitor visitor(agent);
     for (const Cell* a : visitor)
         for (auto [d, b] : a->moves) {
-            if (visitor.visited[b->id]) continue;
+            if (visitor.visited(b)) continue;
             if (!b->alive || !frozen[b->id]) {
                 // agent moves to B
-                visitor.add(b, b->id);
+                visitor.add(b);
                 continue;
             }
 
@@ -131,7 +128,7 @@ Boxes goals_with_frozen_boxes(const Cell* agent, const Boxes& boxes, cspan<Cell*
                 return frozen;
             }
             visitor.clear();
-            visitor.add(b, b->id);
+            visitor.add(b);
             break;
         }
 
@@ -154,26 +151,25 @@ static bool around(const Cell* z, const Boxes& boxes, int s_dir) {
     return around(z, 1, boxes, s_dir) || around(z, 3, boxes, s_dir);
 }
 
-// can agent move to C without pushing any box?
+// Can agent move to C without pushing any box?
 template <typename Boxes>
-bool is_cell_reachable(const Cell* c, const Cell* agent, const Boxes& boxes, small_bfs<const Cell*>& visitor) {
-    visitor.clear();
-    visitor.add(agent, agent->id);
+bool is_cell_reachable(const Cell* c, const Cell* agent, const Boxes& boxes) {
+    AgentVisitor visitor(agent);
     for (const Cell* a : visitor)
         for (auto [_, b] : a->moves) {
             if (c == b) return true;
-            if (!boxes[b->id]) visitor.add(b, b->id);
+            if (!boxes[b->id]) visitor.add(b);
         }
     return false;
 }
 
 template <typename Boxes>
-bool is_reversible_push_quick(const Cell* agent, const Boxes& boxes, int dir) {
+bool is_reversible_push(const Cell* agent, const Boxes& boxes, int dir) {
     const Cell* b = agent->dir(dir);
     const Cell* c = b->dir(dir);
     if (!c || boxes[c->id]) return false;
 
-    if (around(agent, boxes, dir)) {
+    if (around(agent, boxes, dir) || is_cell_reachable(c, agent, boxes)) {
         Boxes boxes2 = boxes;
         boxes2.reset(b->id);
         boxes2.set(agent->id);
@@ -182,27 +178,7 @@ bool is_reversible_push_quick(const Cell* agent, const Boxes& boxes, int dir) {
         const Cell* c2 = b2->dir(dir ^ 2);
         if (!c2 || boxes[c2->id]) return false;
 
-        return around(b, boxes2, dir ^ 2);
-    }
-    return false;
-}
-
-template <typename Boxes>
-bool is_reversible_push(const Cell* agent, const Boxes& boxes, int dir, small_bfs<const Cell*>& visitor) {
-    const Cell* b = agent->dir(dir);
-    const Cell* c = b->dir(dir);
-    if (!c || boxes[c->id]) return false;
-
-    if (around(agent, boxes, dir) || is_cell_reachable(c, agent, boxes, visitor)) {
-        Boxes boxes2 = boxes;
-        boxes2.reset(b->id);
-        boxes2.set(agent->id);
-
-        const Cell* b2 = b->dir(dir ^ 2);
-        const Cell* c2 = b2->dir(dir ^ 2);
-        if (!c2 || boxes[c2->id]) return false;
-
-        return around(b, boxes2, dir ^ 2) || is_cell_reachable(c2, b, boxes2, visitor);
+        return around(b, boxes2, dir ^ 2) || is_cell_reachable(c2, b, boxes2);
     }
     return false;
 }

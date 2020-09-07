@@ -213,14 +213,14 @@ class StateQueue {
 
 const static uint kConcurrency = std::thread::hardware_concurrency();
 
-class AgentVisitor : public each<AgentVisitor> {
+class XAgentVisitor : public each<XAgentVisitor> {
 private:
     int pos = 0;
     small_queue<const Exits*> queue;
     std::vector<uchar> visited;  // avoid slower vector<bool> as it is bit compressed!
 
 public:
-    AgentVisitor(uint capacity) : queue(capacity) { visited.resize(capacity, 0); }
+    XAgentVisitor(uint capacity) : queue(capacity) { visited.resize(capacity, 0); }
 
     void clear() {
         queue.clear();
@@ -259,11 +259,10 @@ struct Solver {
     StateMap<State> states;
     StateQueue<State> queue;
     vector<Counters> counters;
-    small_bfs<const Cell*> visitor;
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
 
-    Solver(const Level* level) : level(level), queue(kConcurrency), visitor(level->cells.size()), deadlock_db(level) {
+    Solver(const Level* level) : level(level), queue(kConcurrency), deadlock_db(level) {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
@@ -284,14 +283,12 @@ struct Solver {
 
    public:
     // TODO move to utils
-    // Note: uses visitor
     bool contains_deadlock(const State& s, const State& deadlock) {
         return s.boxes.contains(deadlock.boxes) &&
-               is_cell_reachable(level->cells[s.agent], level->cells[deadlock.agent], deadlock.boxes, visitor);
+               is_cell_reachable(level->cells[s.agent], level->cells[deadlock.agent], deadlock.boxes);
     }
 
     // TODO move to utils
-    // Note: uses visitor
     bool contains_deadlock(const State& s, const vector<State>& deadlocks) {
         for (const State& d : deadlocks)
             if (contains_deadlock(s, d)) return true;
@@ -306,16 +303,25 @@ struct Solver {
         vector<pair<State, int>> candidates;
         State s;
         for (const Boxes& my_boxes : all_boxes) {
-            visitor.clear();
+            AgentVisitor visitor(level);
             int h = heuristic(my_boxes);
             for (uint b = 0; b < level->num_alive; b++)
                 if (my_boxes[b])
                     for (auto [_, a] : level->cells[b]->moves)
-                        if (!my_boxes[a->id] && !visitor.visited[a->id]) {
+                        if (!my_boxes[a->id] && !visitor.visited(a)) {
                             // visit everything reachable from A
                             s.boxes = my_boxes;
                             s.agent = a->id;
-                            normalize(s, visitor, false /*don't clear*/);
+
+                            // Normalize s (without clearing visitor)
+                            visitor.add(a);
+                            for (const Cell* ea : visitor) {
+                                if (ea->id < s.agent) s.agent = ea->id;
+                                for (auto [_, eb] : ea->moves) {
+                                    if (!s.boxes[eb->id]) visitor.add(eb);
+                                }
+                            }
+
                             for (auto [_, c] : a->moves)
                                 if (!my_boxes[c->id]) {
                                     candidates.emplace_back(s, h);
@@ -364,13 +370,12 @@ struct Solver {
         }
     }
 
-    void normalize(State& s, small_bfs<const Cell*>& visitor, bool clear = true) {
-        if (clear) visitor.clear();
-        visitor.add(level->cells[s.agent], s.agent);
+    void normalize(State& s) const {
+        AgentVisitor visitor(level, s.agent);
         for (const Cell* a : visitor) {
             if (a->id < s.agent) s.agent = a->id;
             for (auto [_, b] : a->moves)
-                if (!s.boxes[b->id]) visitor.add(b, b->id);
+                if (!s.boxes[b->id]) visitor.add(b);
         }
     }
 
@@ -465,12 +470,11 @@ struct Solver {
     }
 
     struct WorkerState {
-        small_bfs<const Cell*> tmp_visitor;
         Corrals<State> corrals;
         Counters* counters = nullptr;
         Protected<optional<pair<State, StateInfo>>>* result = nullptr;
 
-        WorkerState(const Level* level) : tmp_visitor(level->cells.size()), corrals(level) {}
+        WorkerState(const Level* level) : corrals(level) {}
     };
 
     // Returns false is push is a deadlock.
@@ -486,10 +490,10 @@ struct Solver {
         ns.boxes.reset(b->id);
         ns.boxes.set(c->id);
 
-        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, ws.tmp_visitor, q)) return false;
+        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, q)) return false;
 
         Timestamp norm_ts;
-        normalize(ns, ws.tmp_visitor);
+        normalize(ns);
 
         Timestamp states_query_ts;
         q.norm_ticks += norm_ts.elapsed(states_query_ts);
@@ -561,7 +565,7 @@ struct Solver {
     optional<pair<State, StateInfo>> Solve(State start, int verbosity = 0, bool pre_normalize = true) {
         if (kConcurrency == 1) print("Warning: Single-threaded!\n");
         Timestamp start_ts;
-        if (pre_normalize) normalize(start, visitor);
+        if (pre_normalize) normalize(start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
         queue.push(start, 0);
 
@@ -574,12 +578,7 @@ struct Solver {
 
         parallel(kConcurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
-//#define AGENT_VISITOR
-#ifdef AGENT_VISITOR
-            AgentVisitor agent_visitor(level->cells.size());
-#else
-            small_bfs<const Cell*> agent_visitor(level->cells.size());
-#endif
+            AgentVisitor agent_visitor(level);
             WorkerState ws(level);
             ws.result = &result;
             ws.counters = &q;
@@ -609,27 +608,16 @@ struct Solver {
 
                 agent_visitor.clear();
                 bool deadlock = true;
-#ifdef AGENT_VISITOR
-                agent_visitor.add(level->cells[s.agent]/*, s.agent*/);
-                for (auto [a, d, b] : agent_visitor) {
-                    if (!s.boxes[b->id]) {
-                        agent_visitor.add(b/*, b->id*/);
-                        continue;
-                    }
-                    if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
-                }
-#else
-                agent_visitor.add(level->cells[s.agent], s.agent);
+                agent_visitor.add(s.agent);
                 for (const Cell* a : agent_visitor) {
                     for (auto [d, b] : a->moves) {
                         if (!s.boxes[b->id]) {
-                            agent_visitor.add(b, b->id);
+                            agent_visitor.add(b);
                             continue;
                         }
                         if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
                     }
                 }
-#endif
                 if (deadlock) {
                     // Add (potentially non-minimal) deadlock pattern
                     // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
@@ -645,7 +633,7 @@ struct Solver {
     pair<State, StateInfo> previous(pair<State, StateInfo> p) {
         auto [s, si] = p;
         if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
-        normalize(s, visitor);
+        normalize(s);
 
         State ps;
         ps.agent = si.prev_agent;
@@ -661,7 +649,7 @@ struct Solver {
         ps.boxes.reset(c->id);
         ps.boxes.set(b->id);
         State norm_ps = ps;
-        normalize(norm_ps, visitor);
+        normalize(norm_ps);
         return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
     }
 
@@ -757,11 +745,10 @@ vector<const Cell*> ShortestPath(const Level* level, const Cell* start, const Ce
     if (boxes[start->id] || boxes[end->id]) THROW(runtime_error, "precondition");
 
     vector<const Cell*> prev(level->cells.size());
-    small_bfs<const Cell*> visitor(level->cells.size());
-    visitor.add(start, start->id);
+    AgentVisitor visitor(start);
     for (const Cell* a : visitor) {
         for (auto [d, b] : a->moves) {
-            if (!boxes[b->id] && visitor.add(b, b->id)) prev[b->id] = a;
+            if (!boxes[b->id] && visitor.add(b)) prev[b->id] = a;
             if (b != end) continue;
             vector<const Cell*> path;
             for (const Cell* p = end; p != start; p = prev[p->id]) path.push_back(p);

@@ -17,9 +17,9 @@ bool solved(const Level* level, const Boxes& boxes) {
 }
 
 template <typename Boxes>
-bool all_empty_goals_are_reachable(const Level* level, small_bfs<const Cell*>& visitor, const Boxes& boxes) {
+bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, const Boxes& boxes) {
     for (int i = 0; i < level->goals().size(); i++) {
-        if (!visitor.visited[i] && !boxes[i]) return false;
+        if (!visitor.visited(i) && !boxes[i]) return false;
     }
     return true;
 }
@@ -66,11 +66,11 @@ public:
     }
 
     template <typename Boxes>
-    void add(const int agent, const Boxes& boxes, small_bfs<const Cell*>& visitor) {
+    void add(const int agent, const Boxes& boxes) {
         _mutex.lock();
         _words.resize(_words.size() + _agent_words + _box_words, 0);
         Word* p = _words.data() + _words.size() - _agent_words - _box_words;
-        write_pattern(agent, boxes, p, visitor);
+        write_pattern(agent, boxes, p);
 
         /*Print(_level, TState(agent, boxes), [this, p](const Cell* e) {
             if (e->id < _num_alive && has_bit(p + _agent_words, e->id)) return "🔵";
@@ -100,14 +100,13 @@ private:
     }
 
     template <typename Boxes>
-    void write_pattern(const int agent, const Boxes& boxes, Word* p, small_bfs<const Cell*>& visitor) {
+    void write_pattern(const int agent, const Boxes& boxes, Word* p) {
         // Agent part
-        visitor.clear();
-        visitor.add(_level->cells[agent], agent);
+        AgentVisitor visitor(_level, agent);
         for (const Cell* a : visitor) {
             add_bit(p, a->id);
             for (auto [_, b] : a->moves) {
-                if (!boxes[b->id]) visitor.add(b, b->id);
+                if (!boxes[b->id]) visitor.add(b);
             }
         }
 
@@ -145,14 +144,14 @@ class DeadlockDB {
 public:
     DeadlockDB(const Level* level) : _level(level), _patterns(level) {}
 
-    bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, const int push_dir, small_bfs<const Cell*>& visitor, Counters& q) {
+    bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, const int push_dir, Counters& q) {
         Timestamp deadlock_ts;
         if (TIMER(is_simple_deadlock(pushed_box, boxes), q.is_simple_deadlock_ticks)) {
             q.simple_deadlocks += 1;
             return true;
         }
 
-        if (TIMER(is_reversible_push(_level->cells[agent], boxes, push_dir, visitor), q.is_reversible_push_ticks)) {
+        if (TIMER(is_reversible_push(_level->cells[agent], boxes, push_dir), q.is_reversible_push_ticks)) {
             q.reversible_pushes += 1;
             return false;
         }
@@ -165,18 +164,18 @@ public:
         Boxes boxes_copy = boxes;
         int num_boxes = _level->goals().size(); // TODO assumption!
 
-        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes_copy, num_boxes, visitor), q.contains_frozen_boxes_ticks);
+        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes_copy, num_boxes), q.contains_frozen_boxes_ticks);
         if (result == Result::Frozen) {
             std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
                 //fmt::print("pre-minimization:\n");
                 //Print(_level, TState<Boxes>(agent, boxes));
-                minimize_pattern(agent, boxes_copy, num_boxes, visitor);
+                minimize_pattern(agent, boxes_copy, num_boxes);
                 //fmt::print("post-minimization:\n");
                 //Print(_level, TState<Boxes>(agent, boxes));
 
                 if (!is_trivial_pattern(boxes_copy, num_boxes) && !solved(_level, boxes_copy)) {
-                    _patterns.add(agent, boxes_copy, visitor);
+                    _patterns.add(agent, boxes_copy);
                 }
             }
         }
@@ -203,7 +202,7 @@ private:
         return false;
     }
 
-    void minimize_pattern(const int agent, Boxes& boxes, int& num_boxes, small_bfs<const Cell*>& visitor) {
+    void minimize_pattern(const int agent, Boxes& boxes, int& num_boxes) {
         if (num_boxes <= 2) return;
 
         const int num_alive = _level->alive().size();
@@ -213,7 +212,7 @@ private:
                 if (!boxes[i]) continue;
 
                 boxes.reset(i);
-                if (contains_frozen_boxes_const(_level->cells[agent], boxes, num_boxes, visitor) == Result::NotFrozen) {
+                if (contains_frozen_boxes_const(_level->cells[agent], boxes, num_boxes) == Result::NotFrozen) {
                     boxes.set(i);
                     continue;
                 }
@@ -226,16 +225,14 @@ private:
     }
 
     // Is it possible to push any box, without ending up in known deadlock state?
-    bool contains_pushable_box(const Cell* agent, Boxes boxes, small_bfs<const Cell*>& visitor) {
-        visitor.clear();
-        visitor.add(agent, agent->id);
-
+    bool contains_pushable_box(const Cell* agent, Boxes boxes) {
+        AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
             for (auto [d, b] : a->moves) {
-                if (visitor.visited[b->id]) continue;
+                if (visitor.visited(b)) continue;
                 if (!boxes[b->id]) {
                     // agent moves to B
-                    visitor.add(b, b->id);
+                    visitor.add(b);
                     continue;
                 }
 
@@ -263,20 +260,19 @@ private:
         UnreachableGoal
     };
 
-    Result contains_frozen_boxes_const(const Cell* agent, Boxes boxes, int num_boxes, small_bfs<const Cell*>& visitor) {
-        return contains_frozen_boxes(agent, boxes, num_boxes, visitor);
+    Result contains_frozen_boxes_const(const Cell* agent, Boxes boxes, int num_boxes) {
+        return contains_frozen_boxes(agent, boxes, num_boxes);
     }
 
-    Result contains_frozen_boxes(const Cell* agent, Boxes& boxes, int& num_boxes, small_bfs<const Cell*>& visitor) {
+    Result contains_frozen_boxes(const Cell* agent, Boxes& boxes, int& num_boxes) {
         // Fast-path
-        visitor.clear();
-        visitor.add(agent, agent->id);
+        AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
             for (auto [d, b] : a->moves) {
-                if (visitor.visited[b->id]) continue;
+                if (visitor.visited(b)) continue; // TODO is this really needed?
                 if (!boxes[b->id]) {
                     // agent moves to B
-                    visitor.add(b, b->id);
+                    visitor.add(b);
                     continue;
                 }
 
@@ -285,7 +281,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push_quick(b, boxes, d) && _patterns.matches(a->id, boxes));
+                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push(b, boxes, d) && _patterns.matches(a->id, boxes));
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -294,20 +290,20 @@ private:
 
                 // agent pushes box from B to C (and box disappears)
                 if (--num_boxes == 1) return Result::NotFrozen;
-                visitor.add(b, b->id);
+                visitor.add(b);
             }
 
         if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) return Result::NotFrozen;
 
         // Slow-path (clear visitor after each push)
         visitor.clear();
-        visitor.add(agent, agent->id);
+        visitor.add(agent);
         for (const Cell* a : visitor)
             for (auto [d, b] : a->moves) {
-                if (visitor.visited[b->id]) continue;
+                if (visitor.visited(b)) continue; // TODO is this really needed?
                 if (!boxes[b->id]) {
                     // agent moves to B
-                    visitor.add(b, b->id);
+                    visitor.add(b);
                     continue;
                 }
 
@@ -316,7 +312,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push_quick(b, boxes, d) && _patterns.matches(a->id, boxes));
+                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push(b, boxes, d) && _patterns.matches(a->id, boxes));
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -326,7 +322,7 @@ private:
                 // agent pushes box from B to C (and box disappears)
                 if (--num_boxes == 1) return Result::NotFrozen;
                 visitor.clear();  // <-- Necessary for edge cases.
-                visitor.add(b, b->id);
+                visitor.add(b);
                 break; // <-- Necesary for edge cases.
             }
 

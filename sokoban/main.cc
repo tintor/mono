@@ -51,7 +51,7 @@ string Solve(string_view file, int verbosity, bool unsolved_only = false) {
 
     vector<string> levels;
     if (file.find(":"sv) != string_view::npos) {
-        levels.push_back(cat(prefix, file));
+        levels.push_back(string(file));
     } else {
         auto num = NumberOfLevels(cat(prefix, file));
         for (int i = 1; i <= num; i++) {
@@ -87,7 +87,7 @@ string Solve(string_view file, int verbosity, bool unsolved_only = false) {
                 for (const int2 delta : solution.first) {
                     env.Action(delta);
                     env.Print();
-                    std::this_thread::sleep_for(100ms);
+                    std::this_thread::sleep_for(60ms);
                     env.Unprint();
                 }
                 if (!env.IsSolved()) THROW(runtime_error2, "not solved");
