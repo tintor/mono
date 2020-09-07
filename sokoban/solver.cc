@@ -31,8 +31,6 @@ using absl::flat_hash_map;
 using absl::flat_hash_set;
 using fmt::print;
 
-double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
-
 template <typename State>
 struct StateMap {
     constexpr static int SHARDS = 64;
@@ -207,44 +205,10 @@ class StateQueue {
     uint min_queue = 0;
     uint blocked_on_queue = 0;
     const uint _concurrency;
+    std::mutex queue_lock;
     uint queue_size = 0;
     vector<mt::array_deque<State>> queue;
-    std::mutex queue_lock;
     std::condition_variable queue_push_cv;
-};
-
-struct Counters {
-    typedef ulong T;
-
-    T simple_deadlocks = 0;
-    T frozen_box_deadlocks = 0;
-    T heuristic_deadlocks = 0;
-    T corral_cuts = 0;
-    T duplicates = 0;
-    T updates = 0;
-
-    T total_ticks = 0;
-    T queue_pop_ticks = 0;
-    T corral_ticks = 0;
-    T corral2_ticks = 0;
-    T is_simple_deadlock_ticks = 0;
-    T is_reversible_push_ticks = 0;
-    T contains_frozen_boxes_ticks = 0;
-    T norm_ticks = 0;
-    T states_query_ticks = 0;
-    T heuristic_ticks = 0;
-    T state_insert_ticks = 0;
-    T queue_push_ticks = 0;
-
-    Counters() { memset(this, 0, sizeof(Counters)); }
-
-    void add(const Counters& src) {
-        const T* s = reinterpret_cast<const T*>(&src);
-        const T* e = s + sizeof(Counters) / sizeof(T);
-        static_assert(sizeof(Counters) == sizeof(T) * 18);
-        T* d = reinterpret_cast<T*>(this);
-        while (s != e) *d++ += *s++;
-    }
 };
 
 const static uint kConcurrency = std::thread::hardware_concurrency();
@@ -297,7 +261,7 @@ struct Solver {
     vector<Counters> counters;
     small_bfs<const Cell*> visitor;
     Boxes goals;
-    DeadlockDB deadlock_db;
+    DeadlockDB<Boxes> deadlock_db;
 
     Solver(const Level* level) : level(level), queue(kConcurrency), visitor(level->cells.size()), deadlock_db(level) {
         for (Cell* c : level->goals()) goals.set(c->id);
@@ -475,18 +439,11 @@ struct Solver {
             else_ticks -= q.heuristic_ticks;
             else_ticks -= q.state_insert_ticks;
             else_ticks -= q.queue_push_ticks;
+            q.else_ticks = else_ticks;
 
-            print(
-                "elapsed {} ({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, "
-                "is_simple_deadlock {:.1f}, is_reversible_push {:.1f}, contains_frozen_boxes {:.1f}, "
-                "norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, "
-                "state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
-                seconds, Sec(q.total_ticks), Sec(q.queue_pop_ticks), Sec(q.corral_ticks), Sec(q.corral2_ticks),
-                Sec(q.is_simple_deadlock_ticks), Sec(q.is_reversible_push_ticks), Sec(q.contains_frozen_boxes_ticks), Sec(q.norm_ticks),
-                Sec(q.states_query_ticks), Sec(q.heuristic_ticks), Sec(q.state_insert_ticks), Sec(q.queue_push_ticks), Sec(else_ticks));
-            print("deadlocks (simple {}, frozen_box {}, heuristic {})", q.simple_deadlocks, q.frozen_box_deadlocks,
-                  q.heuristic_deadlocks);
-            print(", corral cuts {}, dups {}, updates {}", q.corral_cuts, q.duplicates, q.updates);
+            print("elapsed {} ", seconds);
+            q.print();
+            print(", db_size {}", deadlock_db.size());
             print(", locks ({} {}", states.overhead, states.overhead2);
             print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
             // states.print_sizes();
@@ -529,20 +486,7 @@ struct Solver {
         ns.boxes.reset(b->id);
         ns.boxes.set(c->id);
 
-        Timestamp deadlock_ts;
-        if (TIMER(is_simple_deadlock(c, ns.boxes), q.is_simple_deadlock_ticks)) {
-            q.simple_deadlocks += 1;
-            return false;
-        }
-        auto dd = d;
-        auto bb = b;
-        if (TIMER(!is_reversible_push(level->cells[ns.agent], ns.boxes, dd, ws.tmp_visitor),
-                  q.is_reversible_push_ticks) &&
-            TIMER(contains_frozen_boxes(bb, ns.boxes, level->num_goals, level->num_alive, ws.tmp_visitor, deadlock_db),
-                  q.contains_frozen_boxes_ticks)) {
-            q.frozen_box_deadlocks += 1;
-            return false;
-        }
+        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, ws.tmp_visitor, q)) return false;
 
         Timestamp norm_ts;
         normalize(ns, ws.tmp_visitor);
@@ -588,6 +532,7 @@ struct Solver {
         if (h == Cell::Inf) {
             states.unlock(shard);
             q.heuristic_deadlocks += 1;
+            // TODO store pattern in deadlock_db
             return false;
         }
         nsi.heuristic = h;
@@ -689,7 +634,7 @@ struct Solver {
                     // Add (potentially non-minimal) deadlock pattern
                     // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
                     // TODO: if any reversible box is pushed, verify that resulting state is still a deadlock
-                    deadlock_db.AddPattern(s);
+                    //deadlock_db.AddPattern(s.agent, s.boxes);
                 }
             }
         });

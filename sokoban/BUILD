@@ -11,6 +11,7 @@ cc_library(
 cc_library(name = "state", hdrs = ["state.h"], deps = ["//core:array_bool"])
 cc_library(name = "cell", hdrs = ["cell.h"], deps = ["//core:numeric"])
 cc_library(name = "util", hdrs = ["util.h"], deps = [":cell", ":state"])
+cc_library(name = "counters", hdrs = ["counters.h"])
 cc_library(name = "emoji", hdrs = ["emoji.h"])
 cc_library(name = "hungarian", hdrs = ["hungarian.h"])
 
@@ -30,7 +31,7 @@ cc_library(
 cc_library(
     name = "frozen_boxes",
     hdrs = ["frozen_boxes.h"],
-    deps = [":level", ":util"],
+    deps = [":level", ":util", ":counters"],
 )
 
 cc_library(

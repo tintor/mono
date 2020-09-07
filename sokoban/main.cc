@@ -81,6 +81,7 @@ string Solve(string_view file, int verbosity) {
             }
         } else {
             fmt::print("{}: no solution!\n", name);
+            THROW(runtime_error2, "no solution");
             unique_lock g(levels_lock);
             unsolved.emplace_back(split(name, {':', '/'}).back());
         }
