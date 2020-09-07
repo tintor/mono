@@ -688,7 +688,25 @@ Solution InternalSolve(const Level* level, int verbosity, bool single_thread) {
 }
 
 Solution Solve(const Level* level, int verbosity, bool single_thread) {
-#ifdef OPTIMIZE_MEMORY
+#define DENSE(N) \
+    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread); }
+
+    DENSE(1);
+    DENSE(2);
+    DENSE(3);
+    DENSE(4);
+    DENSE(5);
+    DENSE(6);
+    DENSE(7);
+    DENSE(8);
+#undef DENSE
+
+    print(warning, "Warning: Using DynamicBoxes\n");
+    return InternalSolve<DynamicBoxes>(level, verbosity, single_thread);
+}
+
+#if 0
+Solution Solve(const Level* level, int verbosity, bool single_thread) {
     const int dense_size = (level->num_alive + 31) / 32;
 
     double f = (level->num_alive <= 256) ? 1 : 2;
@@ -696,7 +714,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (dense_size <= sparse_size && dense_size <= 32) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread)
+    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread); }
         DENSE(1);
         DENSE(2);
         DENSE(3);
@@ -711,7 +729,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (level->num_alive < 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 4 * N) return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity, single_thread)
+    if (level->num_boxes <= 4 * N) { print("Using SparseBoxes<uchar, {}>\n", 4 * N); return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity, single_thread); }
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -721,7 +739,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (level->num_alive < 256 * 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 2 * N) return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity, single_thread)
+    if (level->num_boxes <= 2 * N) { print("Using SparseBoxes<ushort, {}>\n", 2 * N); return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity, single_thread); }
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -734,11 +752,10 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 #undef SPARSE
     }
 
-    THROW(not_implemented);
-#else
+    print(warning, "Warning: Using DynamicBoxes\n");
     return InternalSolve<DynamicBoxes>(level, verbosity, single_thread);
-#endif
 }
+#endif
 
 template<typename Boxes>
 vector<const Cell*> ShortestPath(const Level* level, const Cell* start, const Cell* end, const Boxes& boxes) {

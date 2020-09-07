@@ -44,7 +44,7 @@ struct DynamicBoxes {
             if (data[i]) out.set(i);
         return out;
     }
-
+    void print() {}
    private:
     std::vector<char> data;
 };
@@ -78,6 +78,7 @@ struct DenseBoxes {
 
     bool contains(const DenseBoxes& o) const { return data.contains(o.data); }
 
+    void print() {}
    private:
     array_bool<32 * Words> data;
 };
@@ -93,7 +94,7 @@ struct hash<array<T, Size>> {
 
 template <typename T, int Capacity>
 struct SparseBoxes {
-    static constexpr int MaxBoxes = std::min(2, Capacity);
+    static constexpr int MaxBoxes = std::max(2, Capacity);
     static constexpr ulong MaxIndex = std::numeric_limits<T>::max() - 1;
     static constexpr T Empty = ~T(0);
     static_assert(MaxIndex < Empty);
@@ -117,7 +118,7 @@ struct SparseBoxes {
     void set(uint index) {
         if (index > MaxIndex) THROW(runtime_error, "out of range");
 
-        for (int i = 0; i < MaxBoxes; i++)
+        for (int i = 0; i < MaxBoxes; i++) {
             if (data[i] >= index) {
                 if (data[i] > index) {
                     if (data[MaxBoxes - 1] != Empty) THROW(runtime_error, "out of capacity");
@@ -126,6 +127,16 @@ struct SparseBoxes {
                 }
                 return;
             }
+        }
+    }
+
+    void print() {
+        ::print("[");
+        for (int i = 0; i < MaxBoxes; i++) if (data[i] != Empty) {
+            if (i > 0) ::print(" ");
+            ::print("{}:{}", i, uint(data[i]));
+        }
+        ::print("]\n");
     }
 
     void reset(int index) {

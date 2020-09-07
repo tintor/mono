@@ -8,7 +8,7 @@ cc_library(
     deps = ["//core:file", "//core:matrix", "//core:exception", "//core:fmt"],
 )
 
-cc_library(name = "state", hdrs = ["state.h"], deps = ["//core:array_bool"])
+library(name = "state", deps = ["//core:array_bool", "//core:exception", "//core:fmt"])
 cc_library(name = "cell", hdrs = ["cell.h"], deps = ["//core:numeric"])
 cc_library(name = "util", hdrs = ["util.h"], deps = [":cell", ":state"])
 cc_library(name = "counters", hdrs = ["counters.h"], deps = ["//core:fmt"])

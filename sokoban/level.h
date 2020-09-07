@@ -37,7 +37,7 @@ struct Level {
 
 class AgentVisitor : public each<AgentVisitor> {
 private:
-    static constexpr int kCapacity = 1000;
+    static constexpr int kCapacity = 1214;
 
     static_vector<ushort, kCapacity> _queue;
     static_vector<char, kCapacity> _visited;
