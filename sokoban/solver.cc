@@ -12,7 +12,7 @@
 #include "sokoban/solver.h"
 #include "sokoban/corrals.h"
 #include "sokoban/frozen.h"
-#include "sokoban/frozen_boxes.h"
+#include "sokoban/deadlock.h"
 #include "sokoban/hungarian.h"
 #include "sokoban/util.h"
 
