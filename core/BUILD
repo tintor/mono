@@ -1,6 +1,8 @@
 package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
+cc_library(name = "fmt", hdrs = ["fmt.h"], deps = ["@fmt"])
+
 library(name = "auto")
 library(name = "numeric", deps = [":auto"])
 

@@ -1,5 +1,3 @@
-#include "fmt/core.h"
-
 #include "core/array_deque.h"
 #include "core/auto.h"
 #include "core/bits_util.h"
@@ -29,7 +27,6 @@ using std::pair;
 using std::optional;
 using absl::flat_hash_map;
 using absl::flat_hash_set;
-using fmt::print;
 
 template <typename State>
 struct StateMap {
@@ -40,13 +37,13 @@ struct StateMap {
     static int shard(const State& s) { return fmix64(s.boxes.hash() * 7) % SHARDS; }
 
     void print_sizes() {
-        fmt::print("states map");
+        print("states map");
         for (int i = 0; i < SHARDS; i++) {
             locks[i].lock();
-            fmt::print(" %h", data[i].size());
+            print(" %h", data[i].size());
             locks[i].unlock();
         }
-        fmt::print("\n");
+        print("\n");
     }
 
     void lock(int shard) {
@@ -566,7 +563,7 @@ struct Solver {
     }
 
     optional<pair<State, StateInfo>> Solve(State start, int verbosity = 0, bool pre_normalize = true) {
-        if (concurrency == 1) print("Warning: Single-threaded!\n");
+        if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
         Timestamp start_ts;
         if (pre_normalize) normalize(start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));

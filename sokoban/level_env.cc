@@ -2,6 +2,7 @@
 #include "core/exception.h"
 #include "core/file.h"
 #include "core/matrix.h"
+#include "core/fmt.h"
 #include <iostream>
 
 using std::string_view;
@@ -101,25 +102,25 @@ bool LevelEnv::IsValid() const {
     // All matrices must be the same size and at least 3.
     int2 shape = wall.shape();
     if (shape.x < 3 || shape.y < 3) {
-        fmt::print("Level too small.\n");
+        print("Level too small.\n");
         return false;
     }
     if (!equal(box.shape(), shape) || !equal(goal.shape(), shape)) return false;
 
     // Agent must be in a non-wall and non-box cell.
     if (agent.x < 0 || agent.x >= shape.x || agent.y >= shape.y || agent.y < 0) {
-        fmt::print("Agent position.\n");
+        print("Agent position.\n");
         return false;
     }
     if (wall(agent) || box(agent)) {
-        fmt::print("Agent overlapping wall or box.\n");
+        print("Agent overlapping wall or box.\n");
         return false;
     }
 
     // Boxes and goals must be in non-wall cells.
     for (int r = 0; r < shape.y; r++) for (int c = 0; c < shape.x; c++) {
         if (wall(r, c) && (box(r, c) || goal(r, c))) {
-            fmt::print("Box or goal overlapping wall.\n");
+            print("Box or goal overlapping wall.\n");
             return false;
         }
     }
@@ -130,7 +131,7 @@ bool LevelEnv::IsValid() const {
         if (box(r, c)) count -= 1;
         if (goal(r, c)) count += 1;
     }
-    if (count < 0) { fmt::print("More boxes than goals.\n"); return false; }
+    if (count < 0) { print("More boxes than goals.\n"); return false; }
     return true;
 }
 

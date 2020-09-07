@@ -5,13 +5,13 @@ cc_library(
     name = "level_env",
     hdrs = ["level_env.h"],
     srcs = ["level_env.cc"],
-    deps = ["//core:file", "//core:matrix", "//core:exception"],
+    deps = ["//core:file", "//core:matrix", "//core:exception", "//core:fmt"],
 )
 
 cc_library(name = "state", hdrs = ["state.h"], deps = ["//core:array_bool"])
 cc_library(name = "cell", hdrs = ["cell.h"], deps = ["//core:numeric"])
 cc_library(name = "util", hdrs = ["util.h"], deps = [":cell", ":state"])
-cc_library(name = "counters", hdrs = ["counters.h"])
+cc_library(name = "counters", hdrs = ["counters.h"], deps = ["//core:fmt"])
 cc_library(name = "emoji", hdrs = ["emoji.h"])
 cc_library(name = "hungarian", hdrs = ["hungarian.h"])
 
@@ -48,7 +48,7 @@ cc_library(
     deps = [
         ":hungarian", ":corrals", ":level", ":level_env", ":state", ":deadlock",
         "//core:timestamp", "//core:thread", "//core:array_deque", "//core:bits", "//core:range", "//core:small_bfs", "//core:string",
-        "@fmt", "@absl//absl/container:flat_hash_set",
+        "@absl//absl/container:flat_hash_set",
     ],
 )
 
@@ -57,8 +57,8 @@ cc_binary(
     srcs = ["main.cc"],
     deps = [
         ":solver",
-        "//core:vector", "//core:auto", "//core:bits", "//core:range", "//core:string", "//core:thread", "//core:timestamp",
-        "@fmt", "@boost//:program_options"
+        "//core:vector", "//core:auto", "//core:bits", "//core:range", "//core:string", "//core:thread", "//core:timestamp", "//core:fmt",
+        "@boost//:program_options"
     ],
     data = glob(["levels/**"]),
 )

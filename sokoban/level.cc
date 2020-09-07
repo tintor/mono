@@ -380,7 +380,7 @@ inline double Complexity(const Level* level) {
 }
 
 void PrintInfo(const Level* level) {
-    fmt::print("cells {}, alive {}, boxes {}, choose {}, complexity {}\n", level->cells.size(),
+    print("cells {}, alive {}, boxes {}, choose {}, complexity {}\n", level->cells.size(),
           level->num_alive, level->num_boxes, Choose(level->num_alive, level->num_boxes), round(Complexity(level)));
     Print(level, level->start);
 }

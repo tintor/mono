@@ -1,5 +1,5 @@
 #pragma once
-#include "fmt/core.h"
+#include "core/fmt.h"
 #include "core/timestamp.h"
 
 double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
@@ -34,14 +34,14 @@ struct Counters {
     Counters() { memset(this, 0, sizeof(Counters)); }
 
     void print() {
-        fmt::print("({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, is_simple_deadlock {:.1f}",
+        ::print("({:.1f} | queue_pop {:.1f}, corral {:.1f} {:.1f}, is_simple_deadlock {:.1f}",
             Sec(total_ticks), Sec(queue_pop_ticks), Sec(corral_ticks), Sec(corral2_ticks), Sec(is_simple_deadlock_ticks));
-        fmt::print(", is_reversible_push {:.1f}, db_contains_pattern {:.1f}, contains_frozen_boxes {:.1f}",
+        ::print(", is_reversible_push {:.1f}, db_contains_pattern {:.1f}, contains_frozen_boxes {:.1f}",
             Sec(is_reversible_push_ticks), Sec(db_contains_pattern_ticks), Sec(contains_frozen_boxes_ticks));
-        fmt::print(", norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
+        ::print(", norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
             Sec(norm_ticks), Sec(states_query_ticks), Sec(heuristic_ticks), Sec(state_insert_ticks), Sec(queue_push_ticks), Sec(else_ticks));
-        fmt::print("deadlocks (simple {}, reversible {}, db {}, frozen_box {}, heuristic {})", simple_deadlocks, reversible_pushes, db_deadlocks, frozen_box_deadlocks, heuristic_deadlocks);
-        fmt::print(", corral cuts {}, dups {}, updates {}", corral_cuts, duplicates, updates);
+        ::print("deadlocks (simple {}, reversible {}, db {}, frozen_box {}, heuristic {})", simple_deadlocks, reversible_pushes, db_deadlocks, frozen_box_deadlocks, heuristic_deadlocks);
+        ::print(", corral cuts {}, dups {}, updates {}", corral_cuts, duplicates, updates);
     }
 
     void add(const Counters& src) {

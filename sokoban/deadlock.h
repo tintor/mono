@@ -168,10 +168,10 @@ public:
         if (result == Result::Frozen) {
             std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
-                //fmt::print("pre-minimization:\n");
+                //print("pre-minimization:\n");
                 //Print(_level, TState<Boxes>(agent, boxes));
                 minimize_pattern(agent, boxes_copy, num_boxes);
-                //fmt::print("post-minimization:\n");
+                //print("post-minimization:\n");
                 //Print(_level, TState<Boxes>(agent, boxes));
 
                 if (!is_trivial_pattern(boxes_copy, num_boxes) && !solved(_level, boxes_copy)) {

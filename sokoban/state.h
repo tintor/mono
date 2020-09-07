@@ -3,6 +3,7 @@
 #include "core/bits.h"
 #include "core/exception.h"
 #include "core/murmur3.h"
+#include "core/fmt.h"
 
 using Agent = uint;
 
@@ -206,7 +207,7 @@ struct StateInfo {
     }
 
     void print() const {
-        fmt::print("distance {}, heuristic {}, dir {}, closed {}, prev_agent {}\n", distance, heuristic, int(dir), closed, prev_agent);
+        ::print("distance {}, heuristic {}, dir {}, closed {}, prev_agent {}\n", distance, heuristic, int(dir), closed, prev_agent);
     }
 };
 static_assert(sizeof(StateInfo) == 8);

@@ -1,9 +1,7 @@
 #include "sokoban/solver.h"
 #include "sokoban/level_env.h"
 
-#include "fmt/core.h"
-#include "fmt/ostream.h"
-
+#include "core/fmt.h"
 #include "core/vector.h"
 #include "core/string.h"
 #include "core/thread.h"
@@ -33,12 +31,12 @@ constexpr string_view kPrefix = "sokoban/levels/";
 constexpr string_view kSolvedPath = "/tmp/sokoban/solved";
 
 bool is_level_solved(string_view name) {
-    return std::filesystem::exists(fmt::format("{}/{}", kSolvedPath, name));
+    return std::filesystem::exists(format("{}/{}", kSolvedPath, name));
 }
 
 void mark_level_solved(string_view name) {
     std::filesystem::create_directories(kSolvedPath);
-    std::ofstream of(fmt::format("{}/{}", kSolvedPath, name), ios_base::app);
+    std::ofstream of(format("{}/{}", kSolvedPath, name), ios_base::app);
 }
 
 struct Options {
@@ -63,7 +61,7 @@ string Solve(string_view file, const Options& options) {
     } else {
         auto num = NumberOfLevels(cat(kPrefix, file));
         for (int i = 1; i <= num; i++) {
-            string name = fmt::format("{}:{}", file, i);
+            string name = format("{}:{}", file, i);
             if (!options.unsolved && contains(Blacklist, string_view(name))) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
@@ -80,13 +78,13 @@ string Solve(string_view file, const Options& options) {
         auto name = levels[task];
         total += 1;
 
-        fmt::print("Level {}\n", name);
+        print("Level {}\n", name);
         LevelEnv env;
-        env.Load(fmt::format("{}{}", kPrefix, name));
+        env.Load(format("{}{}", kPrefix, name));
         const auto solution = Solve(env, options.verbosity, options.single_thread);
         if (!solution.first.empty()) {
             completed += 1;
-            fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
+            print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
             mark_level_solved(name);
             if (options.animate) {
                 env.Print();
@@ -101,21 +99,21 @@ string Solve(string_view file, const Options& options) {
                 if (!env.IsSolved()) THROW(runtime_error2, "not solved");
             }
         } else {
-            fmt::print("{}: no solution!\n", name);
+            print("{}: no solution!\n", name);
             THROW(runtime_error2, "no solution");
             unique_lock g(levels_lock);
             unsolved.emplace_back(split(name, {':', '/'}).back());
         }
-        fmt::print("\n");
+        print("\n");
     });
 
     sort(unsolved, natural_less);
     sort(skipped, natural_less);
 
     string result;
-    result += fmt::format("solved {}/{} in {:.3f}", completed, total, start_ts.elapsed_s());
-    result += fmt::format(" unsolved {}", unsolved);
-    result += fmt::format(" skipped {}", skipped);
+    result += format("solved {}/{} in {:.3f}", completed, total, start_ts.elapsed_s());
+    result += format(" unsolved {}", unsolved);
+    result += format(" skipped {}", skipped);
     return result;
 }
 
@@ -149,7 +147,7 @@ int main(int argc, char** argv) {
     if (vm.count("scan")) {
         auto num = NumberOfLevels(cat(kPrefix, vm["scan"].as<string>()));
         for (size_t i = 0; i < num; i++) {
-            string name = fmt::format("{}:{}", vm["scan"].as<string>(), i + 1);
+            string name = format("{}:{}", vm["scan"].as<string>(), i + 1);
             auto level = LoadLevel(cat(kPrefix, name));
             if (level) PrintInfo(level);
         }
@@ -157,13 +155,13 @@ int main(int argc, char** argv) {
     }
 
     if (vm.count("open")) {
-        fmt::print("{}\n", Solve(vm["open"].as<string>(), options));
+        print("{}\n", Solve(vm["open"].as<string>(), options));
         return 0;
     }
 
     vector<string> results;
     for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
         results.emplace_back(Solve(file, options));
-    for (auto result : results) fmt::print("{}\n", result);
+    for (auto result : results) print("{}\n", result);
     return 0;
 }
