@@ -40,7 +40,7 @@ struct Counters {
             Sec(is_reversible_push_ticks), Sec(db_contains_pattern_ticks), Sec(contains_frozen_boxes_ticks));
         fmt::print(", norm {:.1f}, states_query {:.1f}, heuristic {:.1f}, state_insert {:.1f}, queue_push {:.1f}, else {:.1f})\n",
             Sec(norm_ticks), Sec(states_query_ticks), Sec(heuristic_ticks), Sec(state_insert_ticks), Sec(queue_push_ticks), Sec(else_ticks));
-        fmt::print("deadlocks (simple {}, db {}, frozen_box {}, heuristic {})", simple_deadlocks, db_deadlocks, frozen_box_deadlocks, heuristic_deadlocks);
+        fmt::print("deadlocks (simple {}, reversible {}, db {}, frozen_box {}, heuristic {})", simple_deadlocks, reversible_pushes, db_deadlocks, frozen_box_deadlocks, heuristic_deadlocks);
         fmt::print(", corral cuts {}, dups {}, updates {}", corral_cuts, duplicates, updates);
     }
 

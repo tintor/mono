@@ -285,8 +285,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                // TODO reversible check
-                bool m = is_simple_deadlock(c, boxes) || _patterns.matches(a->id, boxes);
+                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push_quick(b, boxes, d) && _patterns.matches(a->id, boxes));
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -317,8 +316,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                // TODO reversible check
-                bool m = is_simple_deadlock(c, boxes) || _patterns.matches(a->id, boxes);
+                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push_quick(b, boxes, d) && _patterns.matches(a->id, boxes));
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
