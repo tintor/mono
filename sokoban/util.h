@@ -168,6 +168,26 @@ bool is_cell_reachable(const Cell* c, const Cell* agent, const Boxes& boxes, sma
 }
 
 template <typename Boxes>
+bool is_reversible_push_quick(const Cell* agent, const Boxes& boxes, int dir) {
+    const Cell* b = agent->dir(dir);
+    const Cell* c = b->dir(dir);
+    if (!c || boxes[c->id]) return false;
+
+    if (around(agent, boxes, dir)) {
+        Boxes boxes2 = boxes;
+        boxes2.reset(b->id);
+        boxes2.set(agent->id);
+
+        const Cell* b2 = b->dir(dir ^ 2);
+        const Cell* c2 = b2->dir(dir ^ 2);
+        if (!c2 || boxes[c2->id]) return false;
+
+        return around(b, boxes2, dir ^ 2);
+    }
+    return false;
+}
+
+template <typename Boxes>
 bool is_reversible_push(const Cell* agent, const Boxes& boxes, int dir, small_bfs<const Cell*>& visitor) {
     const Cell* b = agent->dir(dir);
     const Cell* c = b->dir(dir);
