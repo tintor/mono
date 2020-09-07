@@ -193,6 +193,22 @@ struct Minimal {
         return count;
     }
 
+    // note: start can be alive cell!
+    vector<Cell*> dead_region(const vector<Cell*>& cells, Cell* start) const {
+        small_bfs<Cell*> visitor(cells.size());
+        visitor.add(start, start->id);
+
+        vector<Cell*> result;
+        for (Cell* a : visitor) {
+            if (a->alive && a != start) continue;
+            result.push_back(a);
+            for (int d = 0; d < 4; d++) {
+                if (a->_dir[d]) visitor.add(a->_dir[d], a->_dir[d]->id);
+            }
+        }
+        return result;
+    }
+
     vector<Cell*> cells(Level* level) const {
         std::unordered_map<uint, Cell*> reverse;
         vector<Cell*> cells;
@@ -213,6 +229,7 @@ struct Minimal {
             for (int m : dirs)
                 if (open(a + m)) visitor.add(a + m, a + m);
         }
+
         sort(cells, [](Cell* a, Cell* b) {
             if (a->goal && !b->goal) return true;
             if (!a->goal && b->goal) return false;
@@ -224,28 +241,63 @@ struct Minimal {
         uint id = 0;
         for (Cell* c : cells) c->id = id++;
 
+        // init Cell::_dir and Cell::dir8
         for (Cell* c : cells) {
             for (int d = 0; d < 4; d++) c->_dir[d] = open(c->xy + dirs[d]) ? reverse[c->xy + dirs[d]] : nullptr;
-
             for (int d = 0; d < 8; d++) c->dir8[d] = open(c->xy + dirs8[d]) ? reverse[c->xy + dirs8[d]] : nullptr;
+        }
 
+        // init Cell::moves
+        for (Cell* c : cells) {
             int m = 0;
-            for (int d = 0; d < 4; d++)
+            for (int d = 0; d < 4; d++) {
                 if (c->dir(d)) m += 1;
+            }
 
             c->moves.resize(m);
             m = 0;
-            for (int d = 0; d < 4; d++)
+            for (int d = 0; d < 4; d++) {
                 if (c->dir(d)) c->moves[m++] = std::pair<int, Cell*>(d, c->dir(d));
+            }
+        }
 
+        // init Cell::new_moves
+        for (Cell* c : cells) {
+            for (Cell* a : dead_region(cells, c)) {
+                for (int d = 0; d < 4; d++) {
+                    if (a->_dir[d] && a->_dir[d]->alive && a->_dir[d] != c) {
+                        c->new_moves.emplace_back(a->_dir[d]);
+                    }
+                }
+            }
+            remove_dups(c->new_moves);
+        }
+
+        // init Cell::new_pushes
+        for (Cell* c : cells) {
+            for (Cell* a : dead_region(cells, c)) {
+                for (int d = 0; d < 4; d++) {
+                    Cell* b = a->_dir[d];
+                    if (b && b->alive && b != c && b->_dir[d] && b->_dir[d]->alive) {
+                        c->new_pushes.emplace_back(d, a->_dir[d]);
+                    }
+                }
+            }
+        }
+
+        // init Cell::pushes
+        for (Cell* c : cells) {
             int p = 0;
-            for (int d = 0; d < 4; d++)
+            for (int d = 0; d < 4; d++) {
                 if (c->dir(d) && c->dir(d)->alive && c->dir(d ^ 2)) p += 1;
+            }
             c->pushes.resize(p);
             p = 0;
-            for (int d = 0; d < 4; d++)
-                if (c->dir(d) && c->dir(d)->alive && c->dir(d ^ 2))
+            for (int d = 0; d < 4; d++) {
+                if (c->dir(d) && c->dir(d)->alive && c->dir(d ^ 2)) {
                     c->pushes[p++] = std::pair<Cell*, Cell*>(c->dir(d), c->dir(d ^ 2));
+                }
+            }
         }
         return cells;
     }
@@ -367,6 +419,13 @@ const Level* LoadLevel(const LevelEnv& env) {
         THROW(runtime_error, "agent(%s) on box", level->start.agent);
 
     ComputePushDistances(level);
+
+    /*string label;
+    Print(level, level->start, [&label](auto e) {
+        label = format("{}", e->id);
+        if (label.size() == 1) label = " " + label;
+        return label;
+    });*/
     return level;
 }
 

@@ -21,6 +21,10 @@ struct Cell {
     Cell* dir(int d) const { return _dir[d & 3]; }
 
     std::vector<std::pair<int, Cell*>> moves;
+
+    std::vector<std::pair<int, Cell*>> new_pushes;
+    std::vector<Cell*> new_moves;
+
     std::vector<std::pair<Cell*, Cell*>> pushes;  // (box_dest, agent_src)
 
     std::array<Cell*, 8> dir8;
