@@ -38,7 +38,15 @@ public:
     }
 
     template <typename Boxes>
-    bool matches(const int agent, const Boxes& boxes) {
+    bool matches(const int agent, const Boxes& boxes, bool print_it = false) {
+        /*if (print_it) {
+            static std::mutex m;
+            std::unique_lock lock(m);
+            print("matches?\n");
+            Print(_level, TState<Boxes>(agent, boxes));
+        }*/
+
+        // TODO assume Boxes is always dense and avoid this conversion!
         array<Word, 100> boxes_static;
         vector<Word> boxes_dynamic;
         Word* wboxes;
@@ -57,7 +65,7 @@ public:
         _mutex.lock_shared();
         const Word* end = _words.data() + _words.size();
         for (const Word* p = _words.data(); p < end; p += _agent_words + _box_words) {
-            if (!matches(agent, wboxes, p)) continue;
+            if (!matches_pattern(agent, wboxes, p)) continue;
             _mutex.unlock_shared();
             return true;
         }
@@ -88,8 +96,23 @@ public:
         return size;
     }
 
+    std::string summary() const {
+        vector<int> count(100);
+        _mutex.lock_shared();
+        const Word* end = _words.data() + _words.size();
+        for (const Word* p = _words.data(); p < end; p += _agent_words + _box_words) {
+            int b = 0;
+            for (int i = 0; i < _box_words; i++) b += popcount(p[_agent_words + i]);
+            count[b] += 1;
+        }
+        _mutex.unlock_shared();
+        std::string s;
+        for (int i = 0; i < count.size(); i++) if (count[i] > 0) s += format(" {}:{}", i, count[i]);
+        return s;
+    }
+
 private:
-    bool matches(const int agent, const Word* boxes, const Word* p) {
+    bool matches_pattern(const int agent, const Word* boxes, const Word* p) {
         if (!has_bit(p, agent)) return false;
 
         const Word* pb = p + _agent_words;
@@ -164,7 +187,7 @@ public:
         Boxes boxes_copy = boxes;
         int num_boxes = _level->goals().size(); // TODO assumption!
 
-        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes_copy, num_boxes), q.contains_frozen_boxes_ticks);
+        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
         if (result == Result::Frozen) {
             std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
@@ -191,6 +214,8 @@ public:
     }
 
     size_t size() const { return _patterns.size(); }
+
+    std::string summary() const { return _patterns.summary(); }
 
 private:
     bool is_trivial_pattern(const Boxes& boxes, const int num_boxes) {
@@ -261,10 +286,11 @@ private:
     };
 
     Result contains_frozen_boxes_const(const Cell* agent, Boxes boxes, int num_boxes) {
-        return contains_frozen_boxes(agent, boxes, num_boxes);
+        static thread_local Counters dummy_counters;
+        return contains_frozen_boxes(agent, boxes, num_boxes, dummy_counters);
     }
 
-    Result contains_frozen_boxes(const Cell* agent, Boxes& boxes, int& num_boxes) {
+    Result contains_frozen_boxes(const Cell* agent, Boxes& boxes, int& num_boxes, Counters& q) {
         // Fast-path
         AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
@@ -281,7 +307,9 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                bool m = is_simple_deadlock(c, boxes) || (!is_reversible_push(b, boxes, d) && _patterns.matches(a->id, boxes));
+                auto bb = b;
+                auto dd = d;
+                bool m = is_simple_deadlock(c, boxes) || (!TIMER(is_reversible_push(bb, boxes, dd), q.fb1a_ticks) && TIMER(_patterns.matches(a->id, boxes, true), q.fb1b_ticks));
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -289,11 +317,11 @@ private:
                 }
 
                 // agent pushes box from B to C (and box disappears)
-                if (--num_boxes == 1) return Result::NotFrozen;
+                if (--num_boxes == 1) { q.fb1 += 1; return Result::NotFrozen; }
                 visitor.add(b);
             }
 
-        if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) return Result::NotFrozen;
+        if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb2 += 1; return Result::NotFrozen; }
 
         // Slow-path (clear visitor after each push)
         visitor.clear();
@@ -320,16 +348,17 @@ private:
                 }
 
                 // agent pushes box from B to C (and box disappears)
-                if (--num_boxes == 1) return Result::NotFrozen;
+                if (--num_boxes == 1) { q.fb3 += 1; return Result::NotFrozen; }
                 visitor.clear();  // <-- Necessary for edge cases.
                 visitor.add(b);
                 break; // <-- Necesary for edge cases.
             }
 
-        if (!solved(agent->level, boxes)) return Result::Frozen;
-        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) return Result::UnreachableGoal;
+        if (!solved(agent->level, boxes)) { q.fb4 += 1; return Result::Frozen; }
+        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb5 += 1; return Result::UnreachableGoal; }
         // TODO additional check: unpushable goal
         // convert (agent, boxes) to LevelEnv AND run pull algorithm from every goal (to some box)
+        q.fb6 += 1;
         return Result::NotFrozen;
     }
 

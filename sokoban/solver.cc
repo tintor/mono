@@ -448,7 +448,7 @@ struct Solver {
 
             print("elapsed {} ", seconds);
             q.print();
-            print(", db_size {}", deadlock_db.size());
+            print("db_size {}, db_summary {}", deadlock_db.size(), deadlock_db.summary());
             print(", locks ({} {}", states.overhead, states.overhead2);
             print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
             // states.print_sizes();
