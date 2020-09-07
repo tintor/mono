@@ -5,12 +5,13 @@
 #include "fmt/ostream.h"
 
 #include "core/vector.h"
-#include "core/auto.h"
-#include "core/bits_util.h"
-#include "core/range.h"
 #include "core/string.h"
 #include "core/thread.h"
 #include "core/timestamp.h"
+
+#include <filesystem>
+#include <iostream>
+#include <fstream>
 using namespace std;
 
 const std::vector<string_view> Blacklist = {
@@ -24,15 +25,22 @@ const std::vector<string_view> Blacklist = {
     "microban5:26",
 };
 
-bool Blacklisted(string_view name) {
-    return contains(Blacklist, name);
-}
-
 constexpr string_view prefix = "sokoban/levels/";
 
 constexpr bool kAnimateSolution = false;
 
-string Solve(string_view file, int verbosity) {
+constexpr string_view kSolvedPath = "/tmp/sokoban/solved";
+
+bool is_level_solved(string_view name) {
+    return std::filesystem::exists(fmt::format("{}/{}", kSolvedPath, name));
+}
+
+void mark_level_solved(string_view name) {
+    std::filesystem::create_directories(kSolvedPath);
+    std::ofstream of(fmt::format("{}/{}", kSolvedPath, name), ios_base::app);
+}
+
+string Solve(string_view file, int verbosity, bool unsolved_only = false) {
     Timestamp start_ts;
     atomic<int> total = 0;
     atomic<int> completed = 0;
@@ -48,11 +56,15 @@ string Solve(string_view file, int verbosity) {
         auto num = NumberOfLevels(cat(prefix, file));
         for (int i = 1; i <= num; i++) {
             string name = fmt::format("{}:{}", file, i);
-            if (Blacklisted(name)) {
+            if (!unsolved_only && contains(Blacklist, string_view(name))) {
                 skipped.emplace_back(split(name, {':', '/'}).back());
                 continue;
             }
-            levels.push_back(fmt::format("{}{}", prefix, name));
+            if (unsolved_only && is_level_solved(name)) {
+                skipped.emplace_back(split(name, {':', '/'}).back());
+                continue;
+            }
+            levels.push_back(name);
         }
     }
 
@@ -62,11 +74,12 @@ string Solve(string_view file, int verbosity) {
 
         fmt::print("Level {}\n", name);
         LevelEnv env;
-        env.Load(name);
+        env.Load(fmt::format("{}{}", prefix, name));
         const auto solution = Solve(env, verbosity);
         if (!solution.first.empty()) {
             completed += 1;
             fmt::print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
+            mark_level_solved(name);
             if (kAnimateSolution) {
                 env.Print();
                 std::this_thread::sleep_for(100ms);
@@ -99,13 +112,13 @@ string Solve(string_view file, int verbosity) {
 }
 
 int Main(cspan<string_view> args) {
-    if (args.size() == 2 && args[0] == "dbox2") {
+    if (args.size() == 2 && args[0] == "--dbox2") {
         auto level = LoadLevel(cat(prefix, args[1]));
         PrintInfo(level);
         GenerateDeadlocks(level);
         return 0;
     }
-    if (args.size() == 2 && args[0] == "scan") {
+    if (args.size() == 2 && args[0] == "--scan") {
         auto num = NumberOfLevels(cat(prefix, args[1]));
         for (size_t i = 0; i < num; i++) {
             string name = fmt::format("{}:{}", args[1], i + 1);
@@ -114,10 +127,10 @@ int Main(cspan<string_view> args) {
         }
         return 0;
     }
-    if (args.size() == 0) {
+    if (args.size() == 0 || (args.size() == 1 && args[0] == "--unsolved")) {
         vector<string> results;
-        for (auto file : {"microban1", "microban2", "microban3"}) //, "microban4", "microban5"})
-            results.emplace_back(Solve(file, 2));
+        for (auto file : {"microban1", "microban2", "microban3", "microban4", "microban5"})
+            results.emplace_back(Solve(file, 2, args.size() == 1));
         for (auto result : results) fmt::print("{}\n", result);
         return 0;
     }
