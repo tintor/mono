@@ -3,6 +3,8 @@
 #include <string_view>
 
 struct LevelEnv {
+    std::string name;
+
     // All matrices are the same size
     matrix<bool> wall;
     matrix<bool> box;

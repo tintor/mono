@@ -428,7 +428,7 @@ struct Solver {
             auto open = queue.size();
             auto closed = (total >= open) ? total - open : 0;
 
-            print("states {} ({} {} {:.1f})\n", total, closed, open, 100. * open / total);
+            print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
 
             Counters q;
             for (const Counters& c : counters) q.add(c);

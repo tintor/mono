@@ -69,6 +69,7 @@ static vector<string> LoadLevelLines(string_view filename) {
 }
 
 void LevelEnv::Load(string_view filename) {
+    name = filename;
     auto lines = LoadLevelLines(filename);
 
     int cols = 0;

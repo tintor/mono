@@ -20,6 +20,7 @@ constexpr char Space = ' ';
 constexpr char Dead = ':';
 };
 
+// TODO Replace Minimal with LevelEnv
 struct Minimal {
     // xy is encoded as x + y * W
     int w, h;
@@ -344,6 +345,7 @@ const Level* LoadLevel(const LevelEnv& env) {
 
     // TODO destroy on exception
     Level* level = new Level;
+    level->name = env.name;
     level->buffer = m.cell;
     level->width = m.w;
     level->initial_steps = m.initial_steps;

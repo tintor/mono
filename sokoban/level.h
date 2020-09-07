@@ -9,6 +9,8 @@
 #include "sokoban/state.h"
 
 struct Level {
+    std::string name;
+
     int width;            // for printing only
     std::vector<char> buffer;  // xy -> code, for printing only
     std::vector<int2> initial_steps;
