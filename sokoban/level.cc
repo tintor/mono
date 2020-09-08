@@ -354,6 +354,7 @@ void ComputePushDistances(Level* level) {
         auto goal = g->id;
         visitor.reset();
         distance.fill(Cell::Inf);
+        // Uses "moves" as this is reverse search
         for (auto [_, e] : g->moves)
             if (visitor.try_add(e->id, goal)) distance(e->id, goal) = 0;
         g->push_distance[goal] = 0;
@@ -362,6 +363,7 @@ void ComputePushDistances(Level* level) {
             Cell* a = level->cells[agent];
             minimize(level->cells[box]->push_distance[goal], distance(agent, box));
 
+            // Uses "moves" as this is reverse search
             for (auto [d, n] : a->moves) {
                 uint next = n->id;
                 if (next != box && visitor.try_add(next, box))

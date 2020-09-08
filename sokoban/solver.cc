@@ -307,7 +307,7 @@ struct Solver {
             int h = heuristic(my_boxes);
             for (uint b = 0; b < level->num_alive; b++)
                 if (my_boxes[b])
-                    for (auto [_, a] : level->cells[b]->moves)
+                    for (const Cell* a : level->cells[b]->new_moves)
                         if (!my_boxes[a->id] && !visitor.visited(a)) {
                             // visit everything reachable from A
                             s.boxes = my_boxes;
@@ -317,12 +317,12 @@ struct Solver {
                             visitor.add(a);
                             for (const Cell* ea : visitor) {
                                 if (ea->id < s.agent) s.agent = ea->id;
-                                for (auto [_, eb] : ea->moves) {
+                                for (const Cell* eb : ea->new_moves) {
                                     if (!s.boxes[eb->id]) visitor.add(eb);
                                 }
                             }
 
-                            for (auto [_, c] : a->moves)
+                            for (const Cell* c : a->new_moves)
                                 if (!my_boxes[c->id]) {
                                     candidates.emplace_back(s, h);
                                     break;
@@ -512,7 +512,7 @@ struct Solver {
                 qs->dir = d;
                 qs->distance = si.distance + 1;
                 // no need to update heuristic
-                qs->prev_agent = a->id;
+                qs->prev_agent = b->dir(d ^ 2)->id;
                 states.unlock(shard);
                 queue.push(ns, uint(qs->distance) + uint(qs->heuristic) * Overestimate);
                 q.updates += 1;
@@ -541,7 +541,7 @@ struct Solver {
         }
         nsi.heuristic = h;
 
-        nsi.prev_agent = a->id;
+        nsi.prev_agent = b->dir(d ^ 2)->id;
 
         Timestamp state_insert_ts;
         states.add(ns, nsi, shard);
@@ -610,7 +610,7 @@ struct Solver {
                 bool deadlock = true;
                 agent_visitor.add(s.agent);
                 for (const Cell* a : agent_visitor) {
-                    for (auto [d, b] : a->moves) {
+                    for (auto [d, b] : a->actions) {
                         if (!s.boxes[b->id]) {
                             agent_visitor.add(b);
                             continue;
@@ -764,6 +764,7 @@ vector<const Cell*> ShortestPath(const Level* level, const Cell* start, const Ce
     vector<const Cell*> prev(level->cells.size());
     AgentVisitor visitor(start);
     for (const Cell* a : visitor) {
+        // Uses moves instead of actions, as it needs to reconstruct the entire move path
         for (auto [d, b] : a->moves) {
             if (!boxes[b->id] && visitor.add(b)) prev[b->id] = a;
             if (b != end) continue;
