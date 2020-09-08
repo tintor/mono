@@ -32,6 +32,4 @@ struct Cell {
     constexpr static uint Inf = std::numeric_limits<int>::max();
     std::vector<uint> push_distance;  // from any alive cell to any goal cell (or Inf if not reachable)
     uint min_push_distance;      // min(push_distance)
-
-    bool straight() const { return moves.size() == 2 && (moves[0].first ^ 2) == moves[1].first; }
 };

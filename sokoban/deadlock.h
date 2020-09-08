@@ -249,36 +249,6 @@ private:
         }
     }
 
-    // Is it possible to push any box, without ending up in known deadlock state?
-    bool contains_pushable_box(const Cell* agent, Boxes boxes) {
-        AgentVisitor visitor(agent);
-        for (const Cell* a : visitor)
-            for (auto [d, b] : a->moves) {
-                if (visitor.visited(b)) continue;
-                if (!boxes[b->id]) {
-                    // agent moves to B
-                    visitor.add(b);
-                    continue;
-                }
-
-                const Cell* c = b->dir(d);
-                if (!c || !c->alive || boxes[c->id]) continue;
-
-                boxes.reset(b->id);
-                boxes.set(c->id);
-                // TODO reversible check
-                bool m = is_simple_deadlock(c, boxes) || _patterns.matches(a->id, boxes);
-                boxes.reset(c->id);
-                if (m) {
-                    boxes.set(b->id);
-                    continue;
-                }
-
-                return true;
-            }
-        return false;
-    }
-
     enum class Result {
         NotFrozen,
         Frozen,
