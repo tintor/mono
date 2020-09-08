@@ -102,8 +102,7 @@ Boxes goals_with_frozen_boxes(const Cell* agent, const Boxes& boxes, cspan<Cell*
     int num_boxes = goals.size();
     AgentVisitor visitor(agent);
     for (const Cell* a : visitor)
-        for (auto [d, b] : a->moves) {
-            if (visitor.visited(b)) continue;
+        for (auto [d, b] : a->actions) {
             if (!b->alive || !frozen[b->id]) {
                 // agent moves to B
                 visitor.add(b);
@@ -156,7 +155,7 @@ template <typename Boxes>
 bool is_cell_reachable(const Cell* c, const Cell* agent, const Boxes& boxes) {
     AgentVisitor visitor(agent);
     for (const Cell* a : visitor)
-        for (auto [_, b] : a->moves) {
+        for (const Cell* b : a->new_moves) {
             if (c == b) return true;
             if (!boxes[b->id]) visitor.add(b);
         }
