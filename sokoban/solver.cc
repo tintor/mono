@@ -13,6 +13,7 @@
 #include "sokoban/deadlock.h"
 #include "sokoban/hungarian.h"
 #include "sokoban/util.h"
+#include "sokoban/heuristic.h"
 
 #include "absl/container/flat_hash_set.h"
 
@@ -304,7 +305,7 @@ struct Solver {
         State s;
         for (const Boxes& my_boxes : all_boxes) {
             AgentVisitor visitor(level);
-            int h = heuristic(my_boxes);
+            int h = heuristic(level, my_boxes);
             for (uint b = 0; b < level->num_alive; b++)
                 if (my_boxes[b])
                     for (const Cell* a : level->cells[b]->new_moves)
@@ -377,31 +378,6 @@ struct Solver {
             for (auto [_, b] : a->moves)
                 if (!s.boxes[b->id]) visitor.add(b);
         }
-    }
-
-    uint heuristic_simple(const Boxes& boxes) {
-        uint cost = 0;
-        for (uint i = 0; i < level->num_alive; i++)
-            if (boxes[i]) cost += level->cells[i]->min_push_distance;
-        return cost;
-    }
-
-    // excludes frozen goals from costs
-    uint heuristic(const Boxes& boxes) {
-        vector<uint> goal;  // TODO avoid this alloc
-        for (Cell* g : level->goals())
-            if (!boxes[g->id] || !is_frozen_on_goal_simple(g, boxes)) goal.push_back(g->id);
-        if (goal.size() == level->num_goals) return heuristic_simple(boxes);
-
-        uint cost = 0;
-        for (Cell* box : level->alive())
-            if (boxes[box->id] && !box->goal) {
-                // min push distance out of all non-frozen goals
-                uint dist = Cell::Inf;
-                for (uint i = 0; i < goal.size(); i++) minimize(dist, box->push_distance[goal[i]]);
-                cost += dist;
-            }
-        return cost;
     }
 
     void PrintWithCorral(const State& s, const optional<Corral>& corral) {
@@ -530,7 +506,7 @@ struct Solver {
         q.states_query_ticks += states_query_ts.elapsed(heuristic_ts);
 
         // TODO holding lock while computing heuristic!
-        uint h = heuristic(ns.boxes);
+        uint h = heuristic(level, ns.boxes);
         q.heuristic_ticks += heuristic_ts.elapsed();
 
         if (h == Cell::Inf) {

@@ -1,3 +1,4 @@
+#pragma once
 #include "core/matrix.h"
 /**
  * An implementation of the O(n^3) Hungarian method for the minimum cost assignment problem

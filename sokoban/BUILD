@@ -29,9 +29,15 @@ cc_library(
 )
 
 cc_library(
+    name = "heuristic",
+    hdrs = ["heuristic.h"],
+    deps = [":hungarian", ":level"],
+)
+
+cc_library(
     name = "deadlock",
     hdrs = ["deadlock.h"],
-    deps = [":level", ":util", ":counters"],
+    deps = [":level", ":util", ":counters", ":heuristic"],
 )
 
 cc_library(
@@ -46,7 +52,7 @@ cc_library(
     hdrs = ["solver.h"],
     srcs = ["solver.cc"],
     deps = [
-        ":hungarian", ":corrals", ":level", ":level_env", ":state", ":deadlock",
+        ":heuristic", ":corrals", ":level", ":level_env", ":state", ":deadlock",
         "//core:timestamp", "//core:thread", "//core:array_deque", "//core:bits", "//core:range", "//core:small_bfs", "//core:string",
         "@absl//absl/container:flat_hash_set",
     ],

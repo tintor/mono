@@ -2,6 +2,7 @@
 #include "sokoban/util.h"
 #include "sokoban/level.h"
 #include "sokoban/counters.h"
+#include "sokoban/heuristic.h"
 #include <shared_mutex>
 
 using std::vector;
@@ -165,7 +166,9 @@ class DeadlockDB {
     constexpr static int WordBits = sizeof(Word) * 8;
 
 public:
-    DeadlockDB(const Level* level) : _level(level), _patterns(level) {}
+    DeadlockDB(const Level* level) : _level(level), _patterns(level) {
+
+    }
 
     bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, const int push_dir, Counters& q) {
         Timestamp deadlock_ts;
@@ -218,6 +221,12 @@ public:
     std::string summary() const { return _patterns.summary(); }
 
 private:
+    void load_patterns(const std::string_view filename) {
+    }
+
+    void save_pattern(const int agent, const Boxes& boxes) {
+    }
+
     bool is_trivial_pattern(const Boxes& boxes, const int num_boxes) {
         if (num_boxes > 3) return false;
         const int num_alive = _level->alive().size();
