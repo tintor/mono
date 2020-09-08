@@ -261,28 +261,29 @@ struct Minimal {
             }
         }
 
+        // init Cell::actions
+        for (Cell* c : cells) {
+            for (Cell* a : dead_region(cells, c)) {
+                for (int d = 0; d < 4; d++) {
+                    Cell* b = a->_dir[d];
+                    if (b && b->alive && b != c) {
+                        c->actions.emplace_back(d, a->_dir[d]);
+                    }
+                }
+            }
+        }
+
         // init Cell::new_moves
         for (Cell* c : cells) {
             for (Cell* a : dead_region(cells, c)) {
                 for (int d = 0; d < 4; d++) {
-                    if (a->_dir[d] && a->_dir[d]->alive && a->_dir[d] != c) {
+                    Cell* b = a->_dir[d];
+                    if (b && b->alive && a->_dir[d] != c) {
                         c->new_moves.emplace_back(a->_dir[d]);
                     }
                 }
             }
             remove_dups(c->new_moves);
-        }
-
-        // init Cell::new_pushes
-        for (Cell* c : cells) {
-            for (Cell* a : dead_region(cells, c)) {
-                for (int d = 0; d < 4; d++) {
-                    Cell* b = a->_dir[d];
-                    if (b && b->alive && b != c && b->_dir[d] && b->_dir[d]->alive) {
-                        c->new_pushes.emplace_back(d, a->_dir[d]);
-                    }
-                }
-            }
         }
 
         // init Cell::pushes

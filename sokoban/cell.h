@@ -22,7 +22,7 @@ struct Cell {
 
     std::vector<std::pair<int, Cell*>> moves;
 
-    std::vector<std::pair<int, Cell*>> new_pushes;
+    std::vector<std::pair<int, Cell*>> actions;
     std::vector<Cell*> new_moves;
 
     std::vector<std::pair<Cell*, Cell*>> pushes;  // (box_dest, agent_src)
