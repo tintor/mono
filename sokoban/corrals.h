@@ -79,36 +79,33 @@ bool is_picorral(const Level* level, const Boxes& boxes, const std::vector<uchar
 
 template <typename State>
 void Corrals<State>::find_corrals(const State& s) {
-    // optimize: memory allocation
-    small_bfs<Cell*> visitor(_level->cells.size());
-    visitor.clear();
-    visitor.add(_level->cells[s.agent], s.agent);
+    AgentVisitor visitor(_level, s.agent);
     for (auto& e : _reachable) e = false;
-    for (Cell* a : visitor) {
+    for (const Cell* a : visitor) {
         _reachable[a->id] = true;
         for (auto [_, b] : a->moves)
             if (!s.boxes[b->id])
-                visitor.add(b, b->id);
+                visitor.add(b);
             else
                 _reachable[b->id] = true;
     }
 
     _corrals.clear();
     for (Cell* q : _level->cells)
-        if (!s.boxes[q->id] && !visitor.visited[q->id]) {
+        if (!s.boxes[q->id] && !visitor.visited(q)) {
             // optimize: memory allocation
             std::vector<uchar> corral(_level->cells.size(), false);
 
-            visitor.add(q, q->id);
-            for (Cell* a : visitor) {
+            visitor.add(q);
+            for (const Cell* a : visitor) {
                 corral[a->id] = true;
 
-                for (Cell* b : a->dir8)
+                for (const Cell* b : a->dir8)
                     if (b && !corral[b->id] && s.boxes[b->id]) corral[b->id] = true;
 
                 for (auto [_, b] : a->moves)
                     if (!s.boxes[b->id])
-                        visitor.add(b, b->id);
+                        visitor.add(b);
                     else
                         corral[b->id] = true;
             }
