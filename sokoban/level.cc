@@ -437,11 +437,10 @@ inline double Choose(uint a, uint b) {
 }
 
 inline double Complexity(const Level* level) {
-    return log((level->cells.size() - level->num_boxes) * Choose(level->num_alive, level->num_boxes));
+    return log((level->num_alive - level->num_boxes) * Choose(level->num_alive, level->num_boxes));
 }
 
 void PrintInfo(const Level* level) {
-    print("cells {}, alive {}, boxes {}, choose {}, complexity {}\n", level->cells.size(),
-          level->num_alive, level->num_boxes, Choose(level->num_alive, level->num_boxes), round(Complexity(level)));
+    print("alive {}, boxes {}, complexity {}\n", level->num_alive, level->num_boxes, (int)round(Complexity(level)));
     Print(level, level->start);
 }
