@@ -4,11 +4,12 @@
 #include "sokoban/level.h"
 #include "sokoban/util.h"
 
-using Corral = std::vector<uchar>;  // avoid slower bit optimized vector<bool>
+constexpr int kCapacity = 2000;
+using Corral = static_vector<uchar, kCapacity>;  // avoid slower bit optimized vector<bool>
 
 bool is_single_component(const Level* level, const Corral& corral);
 
-inline void add(std::vector<uchar>& dest, const std::vector<uchar>& src) {
+inline void add(Corral& dest, const Corral& src) {
     for (size_t i = 0; i < min(dest.size(), src.size()); i++)
         if (src[i]) dest[i] = true;
 }
@@ -93,8 +94,8 @@ void Corrals<State>::find_corrals(const State& s) {
     _corrals.clear();
     for (Cell* q : _level->cells)
         if (!s.boxes[q->id] && !visitor.visited(q)) {
-            // optimize: memory allocation
-            std::vector<uchar> corral(_level->cells.size(), false);
+            if (_level->cells.size() > kCapacity) THROW(runtime_error, "level has more cells ({}) than capacity ({})", _level->cells.size(), kCapacity);
+            static_vector<uchar, kCapacity> corral(_level->cells.size(), false);
 
             visitor.add(q);
             for (const Cell* a : visitor) {
