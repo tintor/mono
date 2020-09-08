@@ -128,7 +128,7 @@ private:
         AgentVisitor visitor(_level, agent);
         for (const Cell* a : visitor) {
             add_bit(p, a->id);
-            for (auto [_, b] : a->moves) {
+            for (const Cell* b : a->new_moves) {
                 if (!boxes[b->id]) visitor.add(b);
             }
         }
@@ -264,8 +264,7 @@ private:
         // Fast-path
         AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
-            for (auto [d, b] : a->moves) {
-                if (visitor.visited(b)) continue; // TODO is this really needed?
+            for (auto [d, b] : a->actions) {
                 if (!boxes[b->id]) {
                     // agent moves to B
                     visitor.add(b);
@@ -297,8 +296,7 @@ private:
         visitor.clear();
         visitor.add(agent);
         for (const Cell* a : visitor)
-            for (auto [d, b] : a->moves) {
-                if (visitor.visited(b)) continue; // TODO is this really needed?
+            for (auto [d, b] : a->actions) {
                 if (!boxes[b->id]) {
                     // agent moves to B
                     visitor.add(b);
