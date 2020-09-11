@@ -1,6 +1,7 @@
 #pragma once
 #include "sokoban/util.h"
 #include "sokoban/level.h"
+#include "sokoban/pair_visitor.h"
 #include "sokoban/counters.h"
 #include "sokoban/heuristic.h"
 #include <shared_mutex>

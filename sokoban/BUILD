@@ -22,10 +22,16 @@ cc_library(
 )
 
 cc_library(
+    name = "pair_visitor",
+    hdrs = ["pair_visitor.h"],
+    deps = ["//core:array_deque", "//core:matrix"],
+)
+
+cc_library(
     name = "level",
     hdrs = ["level.h"],
     srcs = ["level.cc"],
-    deps = [":level_env", ":util", "//core:vector", "//core:range", "//core:array_deque", "//core:small_bfs"],
+    deps = [":level_env", ":util", ":pair_visitor", "//core:vector", "//core:range", "//core:small_bfs"],
 )
 
 cc_library(
