@@ -44,6 +44,8 @@ struct Options {
     bool animate = false;
     bool single_thread = false;
     int verbosity = 2;
+    int dist_w = 1;
+    int heur_w = 1;
 };
 
 string Solve(string_view file, const Options& options) {
@@ -81,7 +83,7 @@ string Solve(string_view file, const Options& options) {
         print("Level {}\n", name);
         LevelEnv env;
         env.Load(format("{}{}", kPrefix, name));
-        const auto solution = Solve(env, options.verbosity, options.single_thread);
+        const auto solution = Solve(env, {.verbosity = options.verbosity, .single_thread = options.single_thread, .dist_w = options.dist_w, .heur_w = options.heur_w});
         if (!solution.first.empty()) {
             completed += 1;
             print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
@@ -128,6 +130,8 @@ int main(int argc, char** argv) {
         ("single-thread", po::bool_switch(&options.single_thread), "")
         ("unsolved", po::bool_switch(&options.unsolved), "")
         ("verbosity", po::value<int>(&options.verbosity), "")
+        ("dist_w", po::value<int>(&options.dist_w), "")
+        ("heur_w", po::value<int>(&options.heur_w), "")
         ("deadlocks", po::value<string>(), "")
         ("scan", po::value<string>(), "")
         ("open", po::value<string>(), "")
@@ -140,7 +144,7 @@ int main(int argc, char** argv) {
     if (vm.count("deadlocks")) {
         auto level = LoadLevel(cat(kPrefix, vm["deadlocks"].as<string>()));
         PrintInfo(level);
-        GenerateDeadlocks(level, options.single_thread);
+        GenerateDeadlocks(level, {.single_thread = options.single_thread});
         return 0;
     }
 

@@ -252,6 +252,9 @@ struct Solver {
     using Boxes = typename State::Boxes;
 
     const int concurrency;
+    const int dist_w, heur_w;
+    const int verbosity;
+
     const Level* level;
     StateMap<State> states;
     StateQueue<State> queue;
@@ -259,8 +262,11 @@ struct Solver {
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
 
-    Solver(const Level* level, bool single_thread)
-            : concurrency(single_thread ? 1 : std::thread::hardware_concurrency())
+    Solver(const Level* level, const SolverOptions& options)
+            : concurrency(options.single_thread ? 1 : std::thread::hardware_concurrency())
+            , dist_w(options.dist_w)
+            , heur_w(options.heur_w)
+            , verbosity(options.verbosity)
             , level(level)
             , queue(concurrency)
             , deadlock_db(level) {
@@ -340,9 +346,9 @@ struct Solver {
             if (!solvable.contains(candidate) && !contains_deadlock(candidate, deadlocks)) {
                 states.reset();
                 queue.reset();
-                auto result = Solve(candidate, 0, false /*pre_normalize*/);
+                auto result = Solve(candidate, false /*pre_normalize*/);
                 if (result.has_value()) {
-                    for (const State& p : solution(*result, 2)) solvable.insert(p);
+                    for (const State& p : solution(*result)) solvable.insert(p);
                 } else {
                     Print(level, candidate);
                     new_deadlocks.push_back(candidate);
@@ -390,7 +396,7 @@ struct Solver {
         });
     }
 
-    void Monitor(int verbosity, const Timestamp& start_ts) {
+    void Monitor(const Timestamp& start_ts) {
         Corrals<State> corrals(level);
         bool running = verbosity > 0;
         if (!running) return;
@@ -477,7 +483,6 @@ struct Solver {
         int shard = StateMap<State>::shard(ns);
         states.lock(shard);
 
-        constexpr int Overestimate = 2;
         StateInfo* qs = states.query(ns, shard);
         if (qs) {
             q.duplicates += 1;
@@ -490,7 +495,7 @@ struct Solver {
                 // no need to update heuristic
                 qs->prev_agent = b->dir(d ^ 2)->id;
                 states.unlock(shard);
-                queue.push(ns, uint(qs->distance) + uint(qs->heuristic) * Overestimate);
+                queue.push(ns, uint(qs->distance) * dist_w + uint(qs->heuristic) * heur_w);
                 q.updates += 1;
             }
             q.states_query_ticks += states_query_ts.elapsed();
@@ -526,7 +531,7 @@ struct Solver {
         Timestamp queue_push_ts;
         q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
 
-        queue.push(ns, int(nsi.distance) + int(nsi.heuristic) * Overestimate);
+        queue.push(ns, int(nsi.distance) * dist_w + int(nsi.heuristic) * heur_w);
         q.queue_push_ticks += queue_push_ts.elapsed();
 
         if (goals.contains(ns.boxes)) {
@@ -538,7 +543,7 @@ struct Solver {
         return true;
     }
 
-    optional<pair<State, StateInfo>> Solve(State start, int verbosity = 0, bool pre_normalize = true) {
+    optional<pair<State, StateInfo>> Solve(State start, bool pre_normalize = true) {
         if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
         Timestamp start_ts;
         if (pre_normalize) normalize(start);
@@ -550,7 +555,7 @@ struct Solver {
         Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([verbosity, this, start_ts]() { Monitor(verbosity, start_ts); });
+        std::thread monitor([this, start_ts]() { Monitor(start_ts); });
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
@@ -629,7 +634,7 @@ struct Solver {
         return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
     }
 
-    Solution solution(pair<State, StateInfo> s, int verbosity) {
+    Solution solution(pair<State, StateInfo> s) {
         Timestamp ts;
         vector<DynamicState> result;
         while (true) {
@@ -655,17 +660,17 @@ struct Solver {
 };
 
 template <typename Boxes>
-Solution InternalSolve(const Level* level, int verbosity, bool single_thread) {
-    if (verbosity > 0) PrintInfo(level);
-    Solver<TState<Boxes>> solver(level, single_thread);
-    auto solution = solver.Solve(level->start, verbosity);
-    if (solution) return solver.solution(*solution, verbosity);
+Solution InternalSolve(const Level* level, const SolverOptions& options) {
+    if (options.verbosity > 0) PrintInfo(level);
+    Solver<TState<Boxes>> solver(level, options);
+    auto solution = solver.Solve(level->start);
+    if (solution) return solver.solution(*solution);
     return {};
 }
 
-Solution Solve(const Level* level, int verbosity, bool single_thread) {
+Solution Solve(const Level* level, const SolverOptions& options) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread); }
+    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, options); }
 
     DENSE(1);
     DENSE(2);
@@ -678,7 +683,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 #undef DENSE
 
     print(warning, "Warning: Using DynamicBoxes\n");
-    return InternalSolve<DynamicBoxes>(level, verbosity, single_thread);
+    return InternalSolve<DynamicBoxes>(level, options);
 }
 
 #if 0
@@ -690,7 +695,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (dense_size <= sparse_size && dense_size <= 32) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, verbosity, single_thread); }
+    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, options); }
         DENSE(1);
         DENSE(2);
         DENSE(3);
@@ -705,7 +710,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (level->num_alive < 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 4 * N) { print("Using SparseBoxes<uchar, {}>\n", 4 * N); return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, verbosity, single_thread); }
+    if (level->num_boxes <= 4 * N) { print("Using SparseBoxes<uchar, {}>\n", 4 * N); return InternalSolve<SparseBoxes<uchar, 4 * N>>(level, options); }
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -715,7 +720,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
 
     if (level->num_alive < 256 * 256) {
 #define SPARSE(N) \
-    if (level->num_boxes <= 2 * N) { print("Using SparseBoxes<ushort, {}>\n", 2 * N); return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, verbosity, single_thread); }
+    if (level->num_boxes <= 2 * N) { print("Using SparseBoxes<ushort, {}>\n", 2 * N); return InternalSolve<SparseBoxes<ushort, 2 * N>>(level, options); }
         SPARSE(1);
         SPARSE(2);
         SPARSE(3);
@@ -729,7 +734,7 @@ Solution Solve(const Level* level, int verbosity, bool single_thread) {
     }
 
     print(warning, "Warning: Using DynamicBoxes\n");
-    return InternalSolve<DynamicBoxes>(level, verbosity, single_thread);
+    return InternalSolve<DynamicBoxes>(level, options);
 }
 #endif
 
@@ -777,9 +782,9 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
 }
 
 // Returns steps as deltas and number of pushes.
-pair<vector<int2>, int> Solve(LevelEnv env, int verbosity, bool single_thread) {
+pair<vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options) {
     auto level = LoadLevel(env);
-    auto pushes = Solve(level, verbosity, single_thread);
+    auto pushes = Solve(level, options);
     if (pushes.empty()) return {};
 
     Timestamp ts;
@@ -799,20 +804,20 @@ pair<vector<int2>, int> Solve(LevelEnv env, int verbosity, bool single_thread) {
 }
 
 template <typename Cell>
-void InternalGenerateDeadlocks(const Level* level, bool single_thread) {
+void InternalGenerateDeadlocks(const Level* level, const SolverOptions& options) {
     const int MaxBoxes = 4;
     Timestamp ts;
     using State = TState<DynamicBoxes>;
     // using State = TState<SparseBoxes<Cell, MaxBoxes>>;
-    Solver<State> solver(level, single_thread);
+    Solver<State> solver(level, options);
     vector<State> deadlocks;
     for (auto boxes : range(1, MaxBoxes + 1)) solver.generate_deadlocks(boxes, deadlocks);
     print("found deadlocks {} in {}\n", deadlocks.size(), ts.elapsed());
 }
 
-void GenerateDeadlocks(const Level* level, bool single_thread) {
+void GenerateDeadlocks(const Level* level, const SolverOptions& options) {
     if (level->num_alive < 256)
-        InternalGenerateDeadlocks<uchar>(level, single_thread);
+        InternalGenerateDeadlocks<uchar>(level, options);
     else
-        InternalGenerateDeadlocks<ushort>(level, single_thread);
+        InternalGenerateDeadlocks<ushort>(level, options);
 }

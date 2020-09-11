@@ -6,6 +6,13 @@
 
 using Solution = std::vector<DynamicState>;
 
-std::pair<std::vector<int2>, int> Solve(LevelEnv env, int verbosity, bool single_thread);
+struct SolverOptions {
+    int verbosity = 2;
+    bool single_thread = false;
+    int dist_w = 1;
+    int heur_w = 1;
+};
 
-void GenerateDeadlocks(const Level* level, bool single_thread);
+std::pair<std::vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options);
+
+void GenerateDeadlocks(const Level* level, const SolverOptions& options);
