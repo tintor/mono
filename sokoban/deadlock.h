@@ -25,6 +25,43 @@ bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, co
     return true;
 }
 
+template <typename Boxes>
+bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen) {
+    const Level* level = agent->level;
+    PairVisitor visitor(level->cells.size(), level->num_alive);
+
+    for (Cell* g : level->goals()) {
+        if (frozen[g->id]) continue;
+
+        visitor.reset();
+        // Uses "moves" as this is reverse search
+        for (auto [_, e] : g->moves)
+            if (!frozen[e->id]) visitor.try_add(e->id, g->id);
+
+        bool goal_reachable = false;
+        for (auto [a_id, b_id] : visitor) {
+            if (a_id == agent->id && non_frozen[b_id]) {
+                goal_reachable = true;
+                break;
+            }
+
+            const Cell* a = level->cells[a_id];
+            const Cell* b = level->cells[b_id];
+
+            // Uses "moves" as this is reverse search
+            for (auto [d, n] : a->moves) {
+                if (frozen[n->id]) continue;
+                if (n != b) visitor.try_add(n->id, b->id); // move
+                if (a->dir(d ^ 2) && a->dir(d ^ 2) == b) visitor.try_add(n->id, a->id); // pull
+            }
+        }
+
+        if (!goal_reachable) return true;
+    }
+
+    return false;
+}
+
 // Thread-safe, and allows adding duplicate / redundant patterns!
 class Patterns {
     using Word = uint;
@@ -190,7 +227,7 @@ public:
         Boxes boxes_copy = boxes;
         int num_boxes = _level->goals().size(); // TODO assumption!
 
-        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
+        Result result = TIMER(contains_frozen_boxes(_level->cells[agent], boxes, boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
         if (result == Result::Frozen) {
             std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
@@ -205,7 +242,7 @@ public:
                 }
             }
         }
-        if (result == Result::UnreachableGoal) {
+        if (result == Result::BlockedGoal) {
             // TODO add goal room deadlock pattern
         }
 
@@ -261,15 +298,16 @@ private:
     enum class Result {
         NotFrozen,
         Frozen,
-        UnreachableGoal
+        BlockedGoal,
     };
 
-    Result contains_frozen_boxes_const(const Cell* agent, Boxes boxes, int num_boxes) {
+    Result contains_frozen_boxes_const(const Cell* agent, const Boxes& boxes, int num_boxes) {
         static thread_local Counters dummy_counters;
-        return contains_frozen_boxes(agent, boxes, num_boxes, dummy_counters);
+        Boxes mutable_boxes = boxes;
+        return contains_frozen_boxes(agent, boxes, mutable_boxes, num_boxes, dummy_counters);
     }
 
-    Result contains_frozen_boxes(const Cell* agent, Boxes& boxes, int& num_boxes, Counters& q) {
+    Result contains_frozen_boxes(const Cell* agent, const Boxes& orig_boxes, Boxes& boxes, int& num_boxes, Counters& q) {
         // Fast-path
         AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
@@ -332,10 +370,9 @@ private:
             }
 
         if (!solved(agent->level, boxes)) { q.fb4 += 1; return Result::Frozen; }
-        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb5 += 1; return Result::UnreachableGoal; }
-        // TODO additional check: unpushable goal
-        // convert (agent, boxes) to LevelEnv AND run pull algorithm from every goal (to some box)
-        q.fb6 += 1;
+        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb5 += 1; return Result::BlockedGoal; }
+        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) { q.fb6 += 1; return Result::BlockedGoal; }
+        q.fb7 += 1;
         return Result::NotFrozen;
     }
 

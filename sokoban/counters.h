@@ -22,6 +22,7 @@ struct Counters {
     T fb4 = 0;
     T fb5 = 0;
     T fb6 = 0;
+    T fb7 = 0;
 
     T fb1a_ticks = 0;
     T fb1b_ticks = 0;
@@ -52,7 +53,7 @@ struct Counters {
             Sec(norm_ticks), Sec(states_query_ticks), Sec(heuristic_ticks), Sec(state_insert_ticks), Sec(queue_push_ticks), Sec(else_ticks));
         ::print("deadlocks (simple {}, reversible {}, db {}, frozen_box {}, heuristic {})", simple_deadlocks, reversible_pushes, db_deadlocks, frozen_box_deadlocks, heuristic_deadlocks);
         ::print(", corral cuts {}, dups {}, updates {}\n", corral_cuts, duplicates, updates);
-        ::print("contains_frozen_boxes({} {} {} {} {} {}) {:.1f} {:.1f}\n", fb1, fb2, fb3, fb4, fb5, fb6, Sec(fb1a_ticks), Sec(fb1b_ticks));
+        ::print("contains_frozen_boxes({} {} {} {} {} {} {}) {:.1f} {:.1f}\n", fb1, fb2, fb3, fb4, fb5, fb6, fb7, Sec(fb1a_ticks), Sec(fb1b_ticks));
     }
 
     double Rel(T a) const {
