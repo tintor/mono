@@ -37,7 +37,3 @@ TEST_CASE("DynamicBoxes", "") {
 TEST_CASE("DenseBoxes<32>", "") {
     Test<DenseBoxes<32>>(4, 8);
 }
-
-TEST_CASE("SparseBoxes<uchar, 4>", "") {
-    Test<SparseBoxes<uchar, 4>>(4, 8);
-}
