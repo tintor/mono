@@ -56,7 +56,7 @@ cc_library(
 cc_library(
     name = "solver",
     hdrs = ["solver.h"],
-    srcs = ["solver.cc"],
+    srcs = ["solver.cc", "state_map.h"],
     deps = [
         ":heuristic", ":corrals", ":level", ":level_env", ":state", ":deadlock",
         "//core:timestamp", "//core:thread", "//core:array_deque", "//core:bits", "//core:range", "//core:small_bfs", "//core:string",
