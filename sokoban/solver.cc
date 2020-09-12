@@ -16,6 +16,8 @@
 #include "sokoban/heuristic.h"
 #include "sokoban/state_map.h"
 
+#include "ctpl.h"
+
 #include <queue>
 
 #include "absl/container/flat_hash_set.h"
@@ -31,9 +33,6 @@ using std::pair;
 using std::optional;
 using absl::flat_hash_map;
 using absl::flat_hash_set;
-
-template <typename State>
-using StateQueue = std::priority_queue<State, std::vector<State>, std::function<bool(const State&, const State&)>>;
 
 template <typename T>
 void ensure_size(vector<T>& vec, size_t s) {
@@ -60,12 +59,12 @@ class ConcurrentStateQueue {
         if (notify) queue_push_cv.notify_all();
     }
 
-    std::optional<std::pair<State, uint>> top() const {
+    std::optional<State> top() const {
         Timestamp lock_ts;
         std::unique_lock<mutex> lk(queue_lock);
         _pop_overhead += lock_ts.elapsed();
         if (block_if_empty(lk)) return nullopt;
-        return std::pair<State, uint>{ queue[min_queue][0], min_queue };
+        return queue[min_queue][0];
     }
 
     std::optional<State> pop() {
@@ -227,8 +226,8 @@ Solution ExtractSolution(pair<State, StateInfo> s, const Level* level, const Sta
     return result;
 }
 
-template<typename State>
-void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const ConcurrentStateQueue<State>& queue, const DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
+template <typename State, typename Queue>
+void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const Queue& queue, const DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
     Corrals<State> corrals(level);
     bool running = verbosity > 0;
     if (!running) return;
@@ -269,19 +268,73 @@ void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const
         if (verbosity >= 2) {
             auto ss = queue.top();
             if (ss.has_value()) {
-                State s = ss->first;
+                State s = ss.value();
 
                 int shard = StateMap<State>::shard(s);
                 states.lock(shard);
                 const StateInfo* q = states.query(s, shard);
                 states.unlock(shard);
-                print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
+                print("distance {}, heuristic {}\n", q->distance, q->heuristic);
                 corrals.find_unsolved_picorral(s);
                 PrintWithCorral(level, s, corrals.opt_picorral());
             }
         }
     }
 }
+
+template <typename State>
+class StateQueue {
+    struct T {
+        typename State::Boxes boxes;
+        Agent agent;
+        float priority;
+    };
+
+public:
+    StateQueue() : _queue([](const T& a, const T& b) { return b.priority < a.priority; }) { // TODO tie breaker if same priority
+    }
+
+    void push(State s, float priority) {
+        std::unique_lock lock(_push_mutex);
+        _queue.push({std::move(s.boxes), s.agent, priority});
+    }
+
+    optional<State> top() const {
+        if (_queue.empty()) return std::nullopt;
+        return State(_queue.top().agent, std::move(_queue.top().boxes));
+    }
+
+    optional<State> pop() {
+        if (_queue.empty()) return std::nullopt;
+        ON_SCOPE_EXIT(_queue.pop());
+        return State(_queue.top().agent, std::move(_queue.top().boxes));
+    }
+
+    size_t size() const { return _queue.size(); }
+
+    std::string monitor() const { return format(""); }
+
+    void shutdown() {
+        std::unique_lock<mutex> lk(_running_lock);
+        _running = true;
+        _running_cv.notify_all();
+    }
+
+    template <class Rep, class Period>
+    bool wait_while_running_for(const std::chrono::duration<Rep, Period>& rel_time) const {
+        std::unique_lock<mutex> lk(_running_lock);
+        if (_running) _running_cv.wait_for(lk, rel_time);
+        return _running;
+    }
+
+private:
+    mutable std::mutex _running_lock;
+    mutable std::condition_variable _running_cv;
+    mutable bool _running = true;
+
+    std::mutex _push_mutex;
+    std::priority_queue<T, std::vector<T>, std::function<bool(const T&, const T&)>> _queue;
+};
 
 template <typename T>
 struct Protected {
@@ -294,8 +347,7 @@ struct Solver {
     using Boxes = typename State::Boxes;
 
     const int concurrency;
-    const int dist_w, heur_w;
-    const int verbosity;
+    const SolverOptions options;
 
     const Level* level;
     StateMap<State> states;
@@ -306,9 +358,7 @@ struct Solver {
 
     Solver(const Level* level, const SolverOptions& options)
             : concurrency(options.single_thread ? 1 : std::thread::hardware_concurrency())
-            , dist_w(options.dist_w)
-            , heur_w(options.heur_w)
-            , verbosity(options.verbosity)
+            , options(options)
             , level(level)
             , queue(concurrency)
             , deadlock_db(level) {
@@ -378,7 +428,7 @@ struct Solver {
                 // no need to update heuristic
                 qs->prev_agent = b->dir(d ^ 2)->id;
                 states.unlock(shard);
-                queue.push(ns, uint(qs->distance) * dist_w + uint(qs->heuristic) * heur_w);
+                queue.push(ns, uint(qs->distance) * options.dist_w + uint(qs->heuristic) * options.heur_w);
                 q.updates += 1;
             }
             q.states_query_ticks += states_query_ts.elapsed();
@@ -414,7 +464,7 @@ struct Solver {
         Timestamp queue_push_ts;
         q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
 
-        queue.push(ns, int(nsi.distance) * dist_w + int(nsi.heuristic) * heur_w);
+        queue.push(ns, int(nsi.distance) * options.dist_w + int(nsi.heuristic) * options.heur_w);
         q.queue_push_ticks += queue_push_ts.elapsed();
 
         if (goals.contains(ns.boxes)) {
@@ -438,7 +488,7 @@ struct Solver {
         Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts, verbosity, level, states, queue, deadlock_db, counters); });
+        std::thread monitor([this, start_ts]() { Monitor(start_ts, options.verbosity, level, states, queue, deadlock_db, counters); });
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
@@ -457,12 +507,6 @@ struct Solver {
 
                 // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
                 // -> if that doesn't work then do a regular search
-
-                // corral = unreachable area surrounded by boxes which are either:
-                // - frozen on goal OR (reachable by agent and only pushable inside)
-
-                // if corral contains a goal (assuming num_boxes == num_goals) or one of its fence boxes isn't on goal
-                // then that corral must be prioritized for push (ignoring all other corrals)
 
                 Timestamp corral_ts;
                 q.queue_pop_ticks += queue_pop_ts.elapsed(corral_ts);
@@ -486,12 +530,193 @@ struct Solver {
     }
 };
 
+template <typename State>
+struct AltSolver {
+    using Boxes = typename State::Boxes;
+
+    const int concurrency;
+    const SolverOptions options;
+
+    const Level* level;
+    StateMap<State> states;
+    StateQueue<State> queue;
+    vector<Counters> counters;
+    Boxes goals;
+    DeadlockDB<Boxes> deadlock_db;
+    ctpl::thread_pool pool;
+
+    AltSolver(const Level* level, const SolverOptions& options)
+            : concurrency(options.single_thread ? 1 : std::thread::hardware_concurrency())
+            , options(options)
+            , level(level)
+            , deadlock_db(level)
+            , pool(concurrency) {
+        for (Cell* c : level->goals()) goals.set(c->id);
+    }
+
+    optional<pair<State, StateInfo>> queue_pop() {
+        optional<State> s = queue.pop();
+        if (!s) return nullopt;
+
+        int shard = StateMap<State>::shard(*s);
+        states.lock2(shard);
+        StateInfo* q = states.query(*s, shard);
+        if (!q || q->closed) THROW(runtime_error, "queue pop failure");
+        StateInfo si = *q;  // copy before unlock
+        q->closed = true;
+        states.unlock(shard);
+        return pair<State, StateInfo>{*s, si};
+    }
+
+    // Returns false is push is a deadlock.
+    bool EvaluatePush(const State& s, const StateInfo& si, const Corrals<State>& corrals, const Cell* a, const Cell* b, const int d, Counters& q, Protected<optional<pair<State, StateInfo>>>& result) {
+        const Cell* c = b->dir(d);
+        if (!c || !c->alive || s.boxes[c->id]) return true;
+        if (corrals.has_picorral() && !corrals.picorral()[c->id]) {
+            q.corral_cuts += 1;
+            return true;
+        }
+        State ns(b->id, s.boxes);
+        ns.boxes.reset(b->id);
+        ns.boxes.set(c->id);
+
+        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, q)) return false;
+
+        Timestamp norm_ts;
+        normalize(level, ns);
+
+        Timestamp states_query_ts;
+        q.norm_ticks += norm_ts.elapsed(states_query_ts);
+
+        int shard = StateMap<State>::shard(ns);
+        states.lock(shard);
+
+        StateInfo* qs = states.query(ns, shard);
+        if (qs) {
+            q.duplicates += 1;
+            if (si.distance + 1 >= qs->distance) {
+                // existing state
+                states.unlock(shard);
+            } else {
+                qs->dir = d;
+                qs->distance = si.distance + 1;
+                // no need to update heuristic
+                qs->prev_agent = b->dir(d ^ 2)->id;
+                states.unlock(shard);
+                queue.push(ns, uint(qs->distance) * options.dist_w + uint(qs->heuristic) * options.heur_w);
+                q.updates += 1;
+            }
+            q.states_query_ticks += states_query_ts.elapsed();
+            return true;
+        }
+
+        // new state
+        StateInfo nsi;
+        nsi.dir = d;
+        nsi.distance = si.distance + 1;
+
+        Timestamp heuristic_ts;
+        q.states_query_ticks += states_query_ts.elapsed(heuristic_ts);
+
+        // TODO holding lock while computing heuristic!
+        uint h = heuristic(level, ns.boxes);
+        q.heuristic_ticks += heuristic_ts.elapsed();
+
+        if (h == Cell::Inf) {
+            states.unlock(shard);
+            q.heuristic_deadlocks += 1;
+            // TODO store pattern in deadlock_db
+            return false;
+        }
+        nsi.heuristic = h;
+
+        nsi.prev_agent = b->dir(d ^ 2)->id;
+
+        Timestamp state_insert_ts;
+        states.add(ns, nsi, shard);
+        states.unlock(shard);
+
+        Timestamp queue_push_ts;
+        q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
+
+        queue.push(ns, int(nsi.distance) * options.dist_w + int(nsi.heuristic) * options.heur_w);
+        q.queue_push_ticks += queue_push_ts.elapsed();
+
+        if (goals.contains(ns.boxes)) {
+            std::unique_lock<mutex> lock(result._mutex);
+            if (!result._data.has_value()) result._data = pair<State, StateInfo>{ns, nsi};
+        }
+        return true;
+    }
+
+    optional<pair<State, StateInfo>> Solve(State start, bool pre_normalize = true) {
+        if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
+        Timestamp start_ts;
+        if (pre_normalize) normalize(level, start);
+        states.add(start, StateInfo(), StateMap<State>::shard(start));
+        queue.push(start, 0);
+
+        if (start.boxes == goals) return pair<State, StateInfo>{start, StateInfo()};
+
+        Protected<optional<pair<State, StateInfo>>> result;
+
+        counters.resize(std::thread::hardware_concurrency());
+        std::thread monitor([this, start_ts]() { Monitor(start_ts, options.verbosity, level, states, queue, deadlock_db, counters); });
+
+        Corrals<State> corrals(level);
+        vector<std::future<bool>> results;
+        while (true) {
+            Timestamp queue_pop_ts;
+            Counters q; // TODO fixme
+            ON_SCOPE_EXIT(q.total_ticks += queue_pop_ts.elapsed());
+
+            auto p = queue_pop();
+            if (!p) return std::nullopt;
+            const State& s = p->first;
+            const StateInfo& si = p->second;
+
+            // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
+            // -> if that doesn't work then do a regular search
+
+            Timestamp corral_ts;
+            q.queue_pop_ticks += queue_pop_ts.elapsed(corral_ts);
+            corrals.find_unsolved_picorral(s);
+            q.corral_ticks += corral_ts.elapsed();
+
+            results.clear();
+
+            for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
+                results.push_back(pool.push([&](int id) { return EvaluatePush(s, si, corrals, a, b, d, q, result); }));
+            });
+
+            bool deadlock = true;
+            for (auto& result : results) if (result.get()) deadlock = false;
+
+            if (deadlock) {
+                // Add (potentially non-minimal) deadlock pattern
+                // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
+                // TODO: if any reversible box is pushed, verify that resulting state is still a deadlock
+                //deadlock_db.AddPattern(s.agent, s.boxes);
+            }
+        }
+        monitor.join();
+        return result._data;
+    }
+};
+
 template <typename Boxes>
 Solution InternalSolve(const Level* level, const SolverOptions& options) {
     if (options.verbosity > 0) PrintInfo(level);
-    Solver<TState<Boxes>> solver(level, options);
-    auto solution = solver.Solve(level->start);
-    if (solution) return ExtractSolution(*solution, level, solver.states);
+
+    if (options.alt) {
+        AltSolver<TState<Boxes>> solver(level, options);
+        auto solution = solver.Solve(level->start);
+        if (solution) return ExtractSolution(*solution, level, solver.states);
+    } else {
+        Solver<TState<Boxes>> solver(level, options);
+        auto solution = solver.Solve(level->start);
+        if (solution) return ExtractSolution(*solution, level, solver.states);
+    }
     return {};
 }
 

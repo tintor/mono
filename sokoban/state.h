@@ -101,7 +101,7 @@ struct TState {
     Agent agent;
 
     TState() {}
-    TState(Agent agent, const Boxes& boxes) : boxes(boxes), agent(agent) {}
+    TState(Agent agent, Boxes boxes) : boxes(std::move(boxes)), agent(agent) {}
 
     template <typename Boxes2>
     operator TState<Boxes2>() const {

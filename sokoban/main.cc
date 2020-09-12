@@ -40,6 +40,7 @@ void mark_level_solved(string_view name) {
 }
 
 struct Options {
+    bool alt = false;
     bool unsolved = false;
     bool animate = false;
     bool single_thread = false;
@@ -83,7 +84,7 @@ string Solve(string_view file, const Options& options) {
         print("Level {}\n", name);
         LevelEnv env;
         env.Load(format("{}{}", kPrefix, name));
-        const auto solution = Solve(env, {.verbosity = options.verbosity, .single_thread = options.single_thread, .dist_w = options.dist_w, .heur_w = options.heur_w});
+        const auto solution = Solve(env, {.verbosity = options.verbosity, .single_thread = options.single_thread, .dist_w = options.dist_w, .heur_w = options.heur_w, .alt = options.alt});
         if (!solution.first.empty()) {
             completed += 1;
             print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
@@ -126,6 +127,7 @@ int main(int argc, char** argv) {
     Options options;
     po::options_description desc("Allowed options");
     desc.add_options()
+        ("alt", po::bool_switch(&options.alt), "")
         ("animate", po::bool_switch(&options.animate), "")
         ("single-thread", po::bool_switch(&options.single_thread), "")
         ("unsolved", po::bool_switch(&options.unsolved), "")

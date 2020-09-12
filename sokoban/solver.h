@@ -11,6 +11,7 @@ struct SolverOptions {
     bool single_thread = false;
     int dist_w = 1;
     int heur_w = 1;
+    bool alt = false;
 };
 
 std::pair<std::vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options);

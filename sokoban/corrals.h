@@ -4,6 +4,12 @@
 #include "sokoban/level.h"
 #include "sokoban/util.h"
 
+// corral = unreachable area surrounded by boxes which are either:
+// - frozen on goal OR (reachable by agent and only pushable inside)
+
+// if corral contains a goal (assuming num_boxes == num_goals) or one of its fence boxes isn't on goal
+// then that corral must be prioritized for push (ignoring all other corrals)
+
 constexpr int kCapacity = 2000;
 using Corral = static_vector<uchar, kCapacity>;  // avoid slower bit optimized vector<bool>
 
