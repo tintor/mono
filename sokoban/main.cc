@@ -39,14 +39,9 @@ void mark_level_solved(string_view name) {
     std::ofstream of(format("{}/{}", kSolvedPath, name), ios_base::app);
 }
 
-struct Options {
-    bool alt = false;
+struct Options : public SolverOptions {
     bool unsolved = false;
     bool animate = false;
-    bool single_thread = false;
-    int verbosity = 2;
-    int dist_w = 1;
-    int heur_w = 1;
 };
 
 string Solve(string_view file, const Options& options) {
@@ -84,7 +79,7 @@ string Solve(string_view file, const Options& options) {
         print("Level {}\n", name);
         LevelEnv env;
         env.Load(format("{}{}", kPrefix, name));
-        const auto solution = Solve(env, {.verbosity = options.verbosity, .single_thread = options.single_thread, .dist_w = options.dist_w, .heur_w = options.heur_w, .alt = options.alt});
+        const auto solution = Solve(env, options);
         if (!solution.first.empty()) {
             completed += 1;
             print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
