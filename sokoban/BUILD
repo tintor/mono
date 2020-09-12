@@ -60,7 +60,7 @@ cc_library(
     deps = [
         ":heuristic", ":corrals", ":level", ":level_env", ":state", ":deadlock",
         "//core:timestamp", "//core:thread", "//core:array_deque", "//core:bits", "//core:range", "//core:small_bfs", "//core:string",
-        "@absl//absl/container:flat_hash_set",
+        "@absl//absl/container:flat_hash_set", "@ctpl",
     ],
 )
 
