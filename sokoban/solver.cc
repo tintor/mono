@@ -16,6 +16,8 @@
 #include "sokoban/heuristic.h"
 #include "sokoban/state_map.h"
 
+#include <queue>
+
 #include "absl/container/flat_hash_set.h"
 
 using namespace std::chrono_literals;
@@ -30,15 +32,18 @@ using std::optional;
 using absl::flat_hash_map;
 using absl::flat_hash_set;
 
+template <typename State>
+using StateQueue = std::priority_queue<State, std::vector<State>, std::function<bool(const State&, const State&)>>;
+
 template <typename T>
 void ensure_size(vector<T>& vec, size_t s) {
     if (s > vec.size()) vec.resize(round_up_power2(s));
 }
 
 template <typename State>
-class StateQueue {
+class ConcurrentStateQueue {
    public:
-    StateQueue(uint concurrency) : _concurrency(concurrency) { queue.resize(256); }
+    ConcurrentStateQueue(uint concurrency) : _concurrency(concurrency) { queue.resize(256); }
 
     void push(const State& s, uint priority) {
         Timestamp lock_ts;
@@ -193,7 +198,7 @@ struct Solver {
 
     const Level* level;
     StateMap<State> states;
-    StateQueue<State> queue;
+    ConcurrentStateQueue<State> queue;
     vector<Counters> counters;
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
