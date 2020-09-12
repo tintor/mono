@@ -181,3 +181,13 @@ bool is_reversible_push(const Cell* agent, const Boxes& boxes, int dir) {
     }
     return false;
 }
+
+template <typename State>
+void normalize(const Level* level, State& s) {
+    AgentVisitor visitor(level, s.agent);
+    for (const Cell* a : visitor) {
+        if (a->id < s.agent) s.agent = a->id;
+        for (auto [_, b] : a->moves)
+            if (!s.boxes[b->id]) visitor.add(b);
+    }
+}

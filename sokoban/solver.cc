@@ -233,15 +233,6 @@ struct Solver {
         }
     }
 
-    void normalize(State& s) const {
-        AgentVisitor visitor(level, s.agent);
-        for (const Cell* a : visitor) {
-            if (a->id < s.agent) s.agent = a->id;
-            for (auto [_, b] : a->moves)
-                if (!s.boxes[b->id]) visitor.add(b);
-        }
-    }
-
     void PrintWithCorral(const State& s, const optional<Corral>& corral) {
         Print(level, s, [&](Cell* c) {
             if (!corral.has_value() || !(*corral)[c->id]) return "";
@@ -331,7 +322,7 @@ struct Solver {
         if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, q)) return false;
 
         Timestamp norm_ts;
-        normalize(ns);
+        normalize(level, ns);
 
         Timestamp states_query_ts;
         q.norm_ticks += norm_ts.elapsed(states_query_ts);
@@ -402,7 +393,7 @@ struct Solver {
     optional<pair<State, StateInfo>> Solve(State start, bool pre_normalize = true) {
         if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
         Timestamp start_ts;
-        if (pre_normalize) normalize(start);
+        if (pre_normalize) normalize(level, start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
         queue.push(start, 0);
 
@@ -470,7 +461,7 @@ struct Solver {
     pair<State, StateInfo> previous(pair<State, StateInfo> p) {
         auto [s, si] = p;
         if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
-        normalize(s);
+        normalize(level, s);
 
         State ps;
         ps.agent = si.prev_agent;
@@ -486,7 +477,7 @@ struct Solver {
         ps.boxes.reset(c->id);
         ps.boxes.set(b->id);
         State norm_ps = ps;
-        normalize(norm_ps);
+        normalize(level, norm_ps);
         return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
     }
 
