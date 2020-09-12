@@ -35,9 +35,9 @@ struct StateMap {
 
     void unlock(int shard) { locks[shard].unlock(); }
 
-    bool contains(const State& s, int shard) { return data[shard].find(s) != data[shard].end(); }
+    bool contains(const State& s, int shard) const { return data[shard].find(s) != data[shard].end(); }
 
-    StateInfo get(const State& s, int shard) { return data[shard].at(s); }
+    StateInfo get(const State& s, int shard) const { return data[shard].at(s); }
 
     StateInfo* query(const State& s, int shard) {
         auto& d = data[shard];

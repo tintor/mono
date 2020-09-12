@@ -182,6 +182,54 @@ public:
     }
 };
 
+template <typename State>
+pair<State, StateInfo> Previous(pair<State, StateInfo> p, const Level* level, const StateMap<State>& states) {
+    auto [s, si] = p;
+    if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
+    normalize(level, s);
+
+    State ps;
+    ps.agent = si.prev_agent;
+    ps.boxes = s.boxes;
+    const Cell* a = level->cells[ps.agent];
+    if (!a) THROW(runtime_error, "A null");
+    const Cell* b = a->dir(si.dir);
+    if (!b) THROW(runtime_error, "B null");
+    if (ps.boxes[b->id]) THROW(runtime_error, "box on B");
+    const Cell* c = b->dir(si.dir);
+    if (!c) THROW(runtime_error, "C null");
+    if (!ps.boxes[c->id]) THROW(runtime_error, "no box on C");
+    ps.boxes.reset(c->id);
+    ps.boxes.set(b->id);
+    State norm_ps = ps;
+    normalize(level, norm_ps);
+    return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
+}
+
+template <typename State>
+Solution ExtractSolution(pair<State, StateInfo> s, const Level* level, const StateMap<State>& states) {
+    Timestamp ts;
+    vector<DynamicState> result;
+    while (true) {
+        result.push_back(s.first);
+        if (s.second.distance == 0) break;
+        s = Previous(s, level, states);
+    }
+    std::reverse(result.begin(), result.end());
+
+    if (result.size() >= 2) {
+        DynamicState& v = result[result.size() - 2];
+        DynamicState& w = result[result.size() - 1];
+        for (int i = 0; i < level->alive().size(); i++) {
+            if (v.boxes[i] && !w.boxes[i]) {
+                w.agent = i;
+                break;
+            }
+        }
+    }
+    return result;
+}
+
 template <typename T>
 struct Protected {
     T _data;
@@ -457,53 +505,6 @@ struct Solver {
         monitor.join();
         return result._data;
     }
-
-    pair<State, StateInfo> previous(pair<State, StateInfo> p) {
-        auto [s, si] = p;
-        if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
-        normalize(level, s);
-
-        State ps;
-        ps.agent = si.prev_agent;
-        ps.boxes = s.boxes;
-        const Cell* a = level->cells[ps.agent];
-        if (!a) THROW(runtime_error, "A null");
-        const Cell* b = a->dir(si.dir);
-        if (!b) THROW(runtime_error, "B null");
-        if (ps.boxes[b->id]) THROW(runtime_error, "box on B");
-        const Cell* c = b->dir(si.dir);
-        if (!c) THROW(runtime_error, "C null");
-        if (!ps.boxes[c->id]) THROW(runtime_error, "no box on C");
-        ps.boxes.reset(c->id);
-        ps.boxes.set(b->id);
-        State norm_ps = ps;
-        normalize(level, norm_ps);
-        return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
-    }
-
-    Solution solution(pair<State, StateInfo> s) {
-        Timestamp ts;
-        vector<DynamicState> result;
-        while (true) {
-            result.push_back(s.first);
-            if (s.second.distance == 0) break;
-            s = previous(s);
-        }
-        std::reverse(result.begin(), result.end());
-
-        if (result.size() >= 2) {
-            DynamicState& v = result[result.size() - 2];
-            DynamicState& w = result[result.size() - 1];
-            for (int i = 0; i < level->alive().size(); i++) {
-                if (v.boxes[i] && !w.boxes[i]) {
-                    w.agent = i;
-                    break;
-                }
-            }
-        }
-        Timestamp te;
-        return result;
-    }
 };
 
 template <typename Boxes>
@@ -511,7 +512,7 @@ Solution InternalSolve(const Level* level, const SolverOptions& options) {
     if (options.verbosity > 0) PrintInfo(level);
     Solver<TState<Boxes>> solver(level, options);
     auto solution = solver.Solve(level->start);
-    if (solution) return solver.solution(*solution);
+    if (solution) return ExtractSolution(*solution, level, solver.states);
     return {};
 }
 
@@ -594,7 +595,6 @@ pair<vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options) {
         ExtractMoves(level, env, pushes[i], steps);
     }
     if (!env.IsSolved()) THROW(runtime_error, "not solved!");
-    Timestamp te;
     return {std::move(steps), pushes.size()};
 }
 
@@ -677,7 +677,9 @@ void generate_deadlocks(const Level* level, const SolverOptions& options, int nu
             solver.queue.reset();
             auto result = solver.Solve(candidate, false /*pre_normalize*/);
             if (result.has_value()) {
-                for (const State& p : solver.solution(*result)) solvable.insert(p);
+                for (const State& p : ExtractSolution(*result, level, solver.states)) {
+                    solvable.insert(p);
+                }
             } else {
                 Print(level, candidate);
                 new_deadlocks.push_back(candidate);
