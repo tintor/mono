@@ -45,6 +45,14 @@ new_git_repository(
     branch = "3.3-stable",
 )
 
+# C++ Thread Pool Library
+new_git_repository(
+    name = "ctpl",
+    build_file = "@//:ctpl.BUILD",
+    remote = "https://github.com/vit-vit/ctpl.git",
+    branch = "master",
+)
+
 # BOOST
 git_repository(
     name = "com_github_nelhage_rules_boost",
