@@ -202,7 +202,8 @@ void for_each_push(const Level* level, const State& s, const Push& push) {
                 visitor.add(b);
                 continue;
             }
-            push(a, b, d);
+            const Cell* c = b->dir(d);
+            if (c && c->alive && !s.boxes[c->id]) push(a, b, d);
         }
     }
 }

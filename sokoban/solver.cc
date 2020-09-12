@@ -396,7 +396,6 @@ struct Solver {
     bool EvaluatePush(const State& s, const StateInfo& si, const Cell* a, const Cell* b, const int d, WorkerState& ws) {
         Counters& q = *ws.counters;
         const Cell* c = b->dir(d);
-        if (!c || !c->alive || s.boxes[c->id]) return true;
         if (ws.corrals.has_picorral() && !ws.corrals.picorral()[c->id]) {
             q.corral_cuts += 1;
             return true;
@@ -566,7 +565,6 @@ struct AltSolver {
     // Returns false is push is a deadlock.
     bool EvaluatePush(const State& s, const StateInfo& si, const Corrals<State>& corrals, const Cell* a, const Cell* b, const int d, Counters& q, Protected<optional<pair<State, StateInfo>>>& result) {
         const Cell* c = b->dir(d);
-        if (!c || !c->alive || s.boxes[c->id]) return true;
         if (corrals.has_picorral() && !corrals.picorral()[c->id]) {
             q.corral_cuts += 1;
             return true;
