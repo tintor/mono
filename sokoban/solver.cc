@@ -214,91 +214,6 @@ struct Solver {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
-   private:
-    void add_more_boxes(Boxes& boxes, const Boxes& goals, int num_boxes, int b0, vector<Boxes>& all_boxes) {
-        if (num_boxes == 0) {
-            if (!goals.contains(boxes)) all_boxes.push_back(boxes);
-            return;
-        }
-
-        for (uint b = b0; b < level->num_alive; b++) {
-            boxes.set(b);
-            if (!is_simple_deadlock(level->cells[b], boxes))
-                add_more_boxes(boxes, goals, num_boxes - 1, b + 1, all_boxes);
-            boxes.reset(b);
-        }
-    }
-
-   public:
-    // TODO move to utils
-    bool contains_deadlock(const State& s, const State& deadlock) {
-        return s.boxes.contains(deadlock.boxes) &&
-               is_cell_reachable(level->cells[s.agent], level->cells[deadlock.agent], deadlock.boxes);
-    }
-
-    // TODO move to utils
-    bool contains_deadlock(const State& s, const vector<State>& deadlocks) {
-        for (const State& d : deadlocks)
-            if (contains_deadlock(s, d)) return true;
-        return false;
-    }
-
-    void generate_deadlocks(int num_boxes, vector<State>& deadlocks) {
-        vector<Boxes> all_boxes;
-        Boxes boxes;
-        add_more_boxes(boxes, goals, num_boxes, 0, all_boxes);
-
-        vector<pair<State, int>> candidates;
-        State s;
-        for (const Boxes& my_boxes : all_boxes) {
-            AgentVisitor visitor(level);
-            int h = heuristic(level, my_boxes);
-            for (uint b = 0; b < level->num_alive; b++)
-                if (my_boxes[b])
-                    for (const Cell* a : level->cells[b]->new_moves)
-                        if (!my_boxes[a->id] && !visitor.visited(a)) {
-                            // visit everything reachable from A
-                            s.boxes = my_boxes;
-                            s.agent = a->id;
-
-                            // Normalize s (without clearing visitor)
-                            visitor.add(a);
-                            for (const Cell* ea : visitor) {
-                                if (ea->id < s.agent) s.agent = ea->id;
-                                for (const Cell* eb : ea->new_moves) {
-                                    if (!s.boxes[eb->id]) visitor.add(eb);
-                                }
-                            }
-
-                            for (const Cell* c : a->new_moves)
-                                if (!my_boxes[c->id]) {
-                                    candidates.emplace_back(s, h);
-                                    break;
-                                }
-                        }
-        }
-
-        // order candidates by highest heuristic value first to maximize overlaps in paths
-        sort(candidates, [](const pair<State, int>& a, const pair<State, int>& b) { return a.second > b.second; });
-
-        vector<State> new_deadlocks;
-        flat_hash_set<State> solvable;
-        for (auto [candidate, _] : candidates)
-            if (!solvable.contains(candidate) && !contains_deadlock(candidate, deadlocks)) {
-                states.reset();
-                queue.reset();
-                auto result = Solve(candidate, false /*pre_normalize*/);
-                if (result.has_value()) {
-                    for (const State& p : solution(*result)) solvable.insert(p);
-                } else {
-                    Print(level, candidate);
-                    new_deadlocks.push_back(candidate);
-                }
-            }
-        deadlocks.reserve(deadlocks.size() + new_deadlocks.size());
-        std::copy(new_deadlocks.begin(), new_deadlocks.end(), std::back_inserter(deadlocks));
-    }
-
     optional<pair<State, StateInfo>> queue_pop() {
         while (true) {
             optional<State> s = queue.pop();
@@ -692,15 +607,103 @@ pair<vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options) {
     return {std::move(steps), pushes.size()};
 }
 
+template <typename Boxes>
+void add_more_boxes(const Level* level, Boxes& boxes, const Boxes& goals, int num_boxes, int b0, vector<Boxes>& all_boxes) {
+    if (num_boxes == 0) {
+        if (!goals.contains(boxes)) all_boxes.push_back(boxes);
+        return;
+    }
+
+    for (uint b = b0; b < level->num_alive; b++) {
+        boxes.set(b);
+        if (!is_simple_deadlock(level->cells[b], boxes))
+            add_more_boxes(level, boxes, goals, num_boxes - 1, b + 1, all_boxes);
+        boxes.reset(b);
+    }
+}
+
+// TODO move to utils
+template <typename State>
+bool contains_deadlock(const Level* level, const State& s, const State& deadlock) {
+    return s.boxes.contains(deadlock.boxes) &&
+           is_cell_reachable(level->cells[s.agent], level->cells[deadlock.agent], deadlock.boxes);
+}
+
+// TODO move to utils
+template <typename State>
+bool contains_deadlock(const Level* level, const State& s, const vector<State>& deadlocks) {
+    for (const State& d : deadlocks)
+        if (contains_deadlock(level, s, d)) return true;
+    return false;
+}
+
+template <typename State>
+void generate_deadlocks(const Level* level, const SolverOptions& options, int num_boxes, vector<State>& deadlocks) {
+    vector<typename State::Boxes> all_boxes;
+    typename State::Boxes boxes, goals;
+    for (Cell* c : level->goals()) goals.set(c->id);
+    add_more_boxes(level, boxes, goals, num_boxes, 0, all_boxes);
+
+    vector<pair<State, int>> candidates;
+    State s;
+    for (const auto& my_boxes : all_boxes) {
+        AgentVisitor visitor(level);
+        int h = heuristic(level, my_boxes);
+        for (uint b = 0; b < level->num_alive; b++)
+            if (my_boxes[b])
+                for (const Cell* a : level->cells[b]->new_moves)
+                    if (!my_boxes[a->id] && !visitor.visited(a)) {
+                        // visit everything reachable from A
+                        s.boxes = my_boxes;
+                        s.agent = a->id;
+
+                        // Normalize s (without clearing visitor)
+                        visitor.add(a);
+                        for (const Cell* ea : visitor) {
+                            if (ea->id < s.agent) s.agent = ea->id;
+                            for (const Cell* eb : ea->new_moves) {
+                                if (!s.boxes[eb->id]) visitor.add(eb);
+                            }
+                        }
+
+                        for (const Cell* c : a->new_moves)
+                            if (!my_boxes[c->id]) {
+                                candidates.emplace_back(s, h);
+                                break;
+                            }
+                    }
+    }
+
+    // order candidates by highest heuristic value first to maximize overlaps in paths
+    sort(candidates, [](const pair<State, int>& a, const pair<State, int>& b) { return a.second > b.second; });
+
+    Solver<State> solver(level, options);
+    vector<State> new_deadlocks;
+    absl::flat_hash_set<State> solvable;
+    for (auto [candidate, _] : candidates)
+        if (!solvable.contains(candidate) && !contains_deadlock(level, candidate, deadlocks)) {
+            solver.states.reset();
+            solver.queue.reset();
+            auto result = solver.Solve(candidate, false /*pre_normalize*/);
+            if (result.has_value()) {
+                for (const State& p : solver.solution(*result)) solvable.insert(p);
+            } else {
+                Print(level, candidate);
+                new_deadlocks.push_back(candidate);
+            }
+        }
+    deadlocks.reserve(deadlocks.size() + new_deadlocks.size());
+    std::copy(new_deadlocks.begin(), new_deadlocks.end(), std::back_inserter(deadlocks));
+}
+
 template <typename Cell>
 void InternalGenerateDeadlocks(const Level* level, const SolverOptions& options) {
     const int MaxBoxes = 4;
     Timestamp ts;
     using State = TState<DynamicBoxes>;
     // using State = TState<SparseBoxes<Cell, MaxBoxes>>;
-    Solver<State> solver(level, options);
     vector<State> deadlocks;
-    for (auto boxes : range(1, MaxBoxes + 1)) solver.generate_deadlocks(boxes, deadlocks);
+    for (auto boxes : range(1, MaxBoxes + 1)) generate_deadlocks(level, options, boxes, deadlocks);
     print("found deadlocks {} in {}\n", deadlocks.size(), ts.elapsed());
 }
 
