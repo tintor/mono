@@ -191,3 +191,18 @@ void normalize(const Level* level, State& s) {
             if (!s.boxes[b->id]) visitor.add(b);
     }
 }
+
+template <typename State, typename Push>
+void for_each_push(const Level* level, const State& s, const Push& push) {
+    AgentVisitor visitor(level);
+    visitor.add(s.agent);
+    for (const Cell* a : visitor) {
+        for (auto [d, b] : a->actions) {
+            if (!s.boxes[b->id]) {
+                visitor.add(b);
+                continue;
+            }
+            push(a, b, d);
+        }
+    }
+}

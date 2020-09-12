@@ -442,7 +442,6 @@ struct Solver {
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
-            AgentVisitor agent_visitor(level);
             WorkerState ws(level);
             ws.result = &result;
             ws.counters = &q;
@@ -470,18 +469,10 @@ struct Solver {
                 ws.corrals.find_unsolved_picorral(s);
                 q.corral_ticks += corral_ts.elapsed();
 
-                agent_visitor.clear();
                 bool deadlock = true;
-                agent_visitor.add(s.agent);
-                for (const Cell* a : agent_visitor) {
-                    for (auto [d, b] : a->actions) {
-                        if (!s.boxes[b->id]) {
-                            agent_visitor.add(b);
-                            continue;
-                        }
-                        if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
-                    }
-                }
+                for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
+                    if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
+                });
                 if (deadlock) {
                     // Add (potentially non-minimal) deadlock pattern
                     // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
