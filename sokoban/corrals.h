@@ -44,6 +44,17 @@ class Corrals {
     Corral _picorral;
 };
 
+template <typename State>
+void PrintWithCorral(const Level* level, const State& s, const std::optional<Corral>& corral) {
+    Print(level, s, [&](Cell* c) {
+        if (!corral.has_value() || !(*corral)[c->id]) return "";
+        if (s.boxes[c->id]) return c->goal ? "🔷" : "⚪";
+        if (c->goal) return "❔";
+        if (!c->alive) return "❕";
+        return "▫️ ";
+    });
+}
+
 // corral with a goal without a box OR a box not on goal
 template <typename Boxes>
 bool is_unsolved_corral(const Level* level, const Boxes& boxes, const Corral& corral) {

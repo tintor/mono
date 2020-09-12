@@ -281,16 +281,6 @@ struct Solver {
         }
     }
 
-    void PrintWithCorral(const State& s, const optional<Corral>& corral) {
-        Print(level, s, [&](Cell* c) {
-            if (!corral.has_value() || !(*corral)[c->id]) return "";
-            if (s.boxes[c->id]) return c->goal ? "🔷" : "⚪";
-            if (c->goal) return "❔";
-            if (!c->alive) return "❕";
-            return "▫️ ";
-        });
-    }
-
     void Monitor(const Timestamp& start_ts) {
         Corrals<State> corrals(level);
         bool running = verbosity > 0;
@@ -340,7 +330,7 @@ struct Solver {
                     states.unlock(shard);
                     print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
                     corrals.find_unsolved_picorral(s);
-                    PrintWithCorral(s, corrals.opt_picorral());
+                    PrintWithCorral(level, s, corrals.opt_picorral());
                 }
             }
         }
