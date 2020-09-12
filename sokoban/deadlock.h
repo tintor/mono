@@ -208,6 +208,9 @@ public:
 
     }
 
+    void add_deadlock(const int agent, const Boxes& boxes) {
+    }
+
     bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, const int push_dir, Counters& q) {
         Timestamp deadlock_ts;
         if (TIMER(is_simple_deadlock(pushed_box, boxes), q.is_simple_deadlock_ticks)) {

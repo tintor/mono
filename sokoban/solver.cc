@@ -450,7 +450,7 @@ struct Solver {
         if (h == Cell::Inf) {
             states.unlock(shard);
             q.heuristic_deadlocks += 1;
-            // TODO store pattern in deadlock_db
+            deadlock_db.add_deadlock(ns.agent, ns.boxes);
             return false;
         }
         nsi.heuristic = h;
@@ -517,12 +517,7 @@ struct Solver {
                 for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
                     if (EvaluatePush(s, si, a, b, d, ws)) deadlock = false;
                 });
-                if (deadlock) {
-                    // Add (potentially non-minimal) deadlock pattern
-                    // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
-                    // TODO: if any reversible box is pushed, verify that resulting state is still a deadlock
-                    //deadlock_db.AddPattern(s.agent, s.boxes);
-                }
+                if (deadlock) deadlock_db.add_deadlock(s.agent, s.boxes);
             }
         });
         monitor.join();
@@ -625,7 +620,7 @@ struct AltSolver {
         if (h == Cell::Inf) {
             states.unlock(shard);
             q.heuristic_deadlocks += 1;
-            // TODO store pattern in deadlock_db
+            deadlock_db.add_deadlock(ns.agent, ns.boxes);
             return false;
         }
         nsi.heuristic = h;
@@ -691,13 +686,7 @@ struct AltSolver {
 
             bool deadlock = true;
             for (auto& result : results) if (result.get()) deadlock = false;
-
-            if (deadlock) {
-                // Add (potentially non-minimal) deadlock pattern
-                // TODO: remove any reversible boxes (that can be pushed once and then pushed back to original position)
-                // TODO: if any reversible box is pushed, verify that resulting state is still a deadlock
-                //deadlock_db.AddPattern(s.agent, s.boxes);
-            }
+            if (deadlock) deadlock_db.add_deadlock(s.agent, s.boxes);
         }
         monitor.join();
         return result._data;
