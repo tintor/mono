@@ -256,7 +256,9 @@ public:
 
     size_t size() const { return _patterns.size(); }
 
-    std::string summary() const { return _patterns.summary(); }
+    std::string monitor() const {
+        return format("{} {}", _patterns.size(), _patterns.summary());
+    }
 
 private:
     void load_patterns(const std::string_view filename) {

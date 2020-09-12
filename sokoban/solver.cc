@@ -48,7 +48,7 @@ class ConcurrentStateQueue {
     void push(const State& s, uint priority) {
         Timestamp lock_ts;
         queue_lock.lock();
-        _overhead += lock_ts.elapsed();
+        _push_overhead += lock_ts.elapsed();
 
         ensure_size(queue, priority + 1);
         queue[priority].push_back(s);
@@ -60,46 +60,27 @@ class ConcurrentStateQueue {
         if (notify) queue_push_cv.notify_all();
     }
 
-    std::optional<std::pair<State, uint>> top() {
-        uint mq;
-        auto s = pop(&mq);
-        if (s.has_value()) return std::pair<State, uint>{*s, mq};
-        return nullopt;
-    }
-
-    std::optional<State> pop(uint* top_ptr = nullptr) {
+    std::optional<std::pair<State, uint>> top() const {
         Timestamp lock_ts;
         std::unique_lock<mutex> lk(queue_lock);
-        _overhead2 += lock_ts.elapsed();
+        _pop_overhead += lock_ts.elapsed();
+        if (block_if_empty(lk)) return nullopt;
+        return std::pair<State, uint>{ queue[min_queue][0], min_queue };
+    }
 
-        if (queue_size == 0) {
-            blocked_on_queue += 1;
-            while (queue_size == 0) {
-                if (!running) return nullopt;
-                if (blocked_on_queue >= _concurrency) {
-                    running = false;
-                    queue_push_cv.notify_all();
-                    return nullopt;
-                }
-                queue_push_cv.wait(lk);
-            }
-            blocked_on_queue -= 1;
-        }
+    std::optional<State> pop() {
+        Timestamp lock_ts;
+        std::unique_lock<mutex> lk(queue_lock);
+        _pop_overhead += lock_ts.elapsed();
+        if (block_if_empty(lk)) return nullopt;
 
-        if (!running) return nullopt;
-        while (queue[min_queue].size() == 0) min_queue += 1;
-
-        if (top_ptr) {
-            *top_ptr = min_queue;
-            return queue[min_queue][0];
-        }
         State s = queue[min_queue].front();
         queue[min_queue].pop_front();
         queue_size -= 1;
         return s;
     }
 
-    size_t size() {
+    size_t size() const {
         std::unique_lock<mutex> lk(queue_lock);
         return queue_size;
     }
@@ -111,43 +92,59 @@ class ConcurrentStateQueue {
     }
 
     template <class Rep, class Period>
-    bool wait_while_running_for(const std::chrono::duration<Rep, Period>& rel_time) {
+    bool wait_while_running_for(const std::chrono::duration<Rep, Period>& rel_time) const {
         std::unique_lock<mutex> lk(queue_lock);
         if (running) queue_push_cv.wait_for(lk, rel_time);
         return running;
     }
 
-    double overhead() {
-        std::unique_lock<mutex> lk(queue_lock);
-        return Timestamp::to_s(_overhead);
-    }
-
-    double overhead2() {
-        std::unique_lock<mutex> lk(queue_lock);
-        return Timestamp::to_s(_overhead2);
-    }
-
     void reset() {
         running = true;
-        _overhead = 0;
-        _overhead2 = 0;
+        _push_overhead = 0;
+        _pop_overhead = 0;
         min_queue = 0;
         blocked_on_queue = 0;
         queue_size = 0;
         queue.clear();
     }
 
+    std::string monitor() const {
+        std::unique_lock<mutex> lk(queue_lock);
+        return format("push {:.3f}, pop {:.3f}", Timestamp::to_s(_push_overhead), Timestamp::to_s(_pop_overhead));
+    }
+
    private:
-    bool running = true;
-    long _overhead = 0;
-    long _overhead2 = 0;
-    uint min_queue = 0;
-    uint blocked_on_queue = 0;
+    bool block_if_empty(std::unique_lock<mutex>& lk) const {
+        if (queue_size == 0) {
+            blocked_on_queue += 1;
+            while (queue_size == 0) {
+                if (!running) return true;
+                if (blocked_on_queue >= _concurrency) {
+                    running = false;
+                    queue_push_cv.notify_all();
+                    return true;
+                }
+                queue_push_cv.wait(lk);
+            }
+            blocked_on_queue -= 1;
+        }
+        if (!running) return true;
+        while (queue[min_queue].size() == 0) min_queue += 1;
+        return false;
+    }
+
     const uint _concurrency;
-    std::mutex queue_lock;
+
+    mutable bool running = true;
+    mutable long _push_overhead = 0;
+    mutable long _pop_overhead = 0;
+    mutable uint blocked_on_queue = 0;
+    mutable std::mutex queue_lock;
+    mutable std::condition_variable queue_push_cv;
+
+    mutable uint min_queue = 0;
     uint queue_size = 0;
     vector<mt::array_deque<State>> queue;
-    std::condition_variable queue_push_cv;
 };
 
 class XAgentVisitor : public each<XAgentVisitor> {
@@ -230,6 +227,62 @@ Solution ExtractSolution(pair<State, StateInfo> s, const Level* level, const Sta
     return result;
 }
 
+template<typename State>
+void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const ConcurrentStateQueue<State>& queue, const DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
+    Corrals<State> corrals(level);
+    bool running = verbosity > 0;
+    if (!running) return;
+
+    while (running) {
+        if (!queue.wait_while_running_for(5s)) running = false;
+        long seconds = std::lround(start_ts.elapsed_s());
+        if (seconds < 4 && running) continue;
+
+        auto total = states.size();
+        auto open = queue.size();
+        auto closed = (total >= open) ? total - open : 0;
+
+        print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
+
+        Counters q;
+        for (const Counters& c : counters) q.add(c);
+        ulong else_ticks = q.total_ticks;
+        else_ticks -= q.queue_pop_ticks;
+        else_ticks -= q.corral_ticks;
+        else_ticks -= q.corral2_ticks;
+        else_ticks -= q.is_simple_deadlock_ticks;
+        else_ticks -= q.is_reversible_push_ticks;
+        else_ticks -= q.contains_frozen_boxes_ticks;
+        else_ticks -= q.norm_ticks;
+        else_ticks -= q.states_query_ticks;
+        else_ticks -= q.heuristic_ticks;
+        else_ticks -= q.state_insert_ticks;
+        else_ticks -= q.queue_push_ticks;
+        q.else_ticks = else_ticks;
+
+        print("elapsed {} ", seconds);
+        q.print();
+        print("deadlock_db [{}]", deadlock_db.monitor());
+        print(" states [{}]", states.monitor());
+        print(" queue [{}]", queue.monitor());
+        print("\n");
+        if (verbosity >= 2) {
+            auto ss = queue.top();
+            if (ss.has_value()) {
+                State s = ss->first;
+
+                int shard = StateMap<State>::shard(s);
+                states.lock(shard);
+                const StateInfo* q = states.query(s, shard);
+                states.unlock(shard);
+                print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
+                corrals.find_unsolved_picorral(s);
+                PrintWithCorral(level, s, corrals.opt_picorral());
+            }
+        }
+    }
+}
+
 template <typename T>
 struct Protected {
     T _data;
@@ -278,61 +331,6 @@ struct Solver {
             q->closed = true;
             states.unlock(shard);
             return pair<State, StateInfo>{*s, si};
-        }
-    }
-
-    void Monitor(const Timestamp& start_ts) {
-        Corrals<State> corrals(level);
-        bool running = verbosity > 0;
-        if (!running) return;
-
-        while (running) {
-            if (!queue.wait_while_running_for(5s)) running = false;
-            long seconds = std::lround(start_ts.elapsed_s());
-            if (seconds < 4 && running) continue;
-
-            auto total = states.size();
-            auto open = queue.size();
-            auto closed = (total >= open) ? total - open : 0;
-
-            print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
-
-            Counters q;
-            for (const Counters& c : counters) q.add(c);
-            ulong else_ticks = q.total_ticks;
-            else_ticks -= q.queue_pop_ticks;
-            else_ticks -= q.corral_ticks;
-            else_ticks -= q.corral2_ticks;
-            else_ticks -= q.is_simple_deadlock_ticks;
-            else_ticks -= q.is_reversible_push_ticks;
-            else_ticks -= q.contains_frozen_boxes_ticks;
-            else_ticks -= q.norm_ticks;
-            else_ticks -= q.states_query_ticks;
-            else_ticks -= q.heuristic_ticks;
-            else_ticks -= q.state_insert_ticks;
-            else_ticks -= q.queue_push_ticks;
-            q.else_ticks = else_ticks;
-
-            print("elapsed {} ", seconds);
-            q.print();
-            print("db_size {}, db_summary {}", deadlock_db.size(), deadlock_db.summary());
-            print(", locks ({} {}", states.overhead, states.overhead2);
-            print(" {:.3f} {:.3f})\n", queue.overhead(), queue.overhead2());
-            // states.print_sizes();
-            if (verbosity >= 2) {
-                auto ss = queue.top();
-                if (ss.has_value()) {
-                    State s = ss->first;
-
-                    int shard = StateMap<State>::shard(s);
-                    states.lock(shard);
-                    StateInfo* q = states.query(s, shard);
-                    states.unlock(shard);
-                    print("queue cost {}, distance {}, heuristic {}\n", ss->second, q->distance, q->heuristic);
-                    corrals.find_unsolved_picorral(s);
-                    PrintWithCorral(level, s, corrals.opt_picorral());
-                }
-            }
         }
     }
 
@@ -440,7 +438,7 @@ struct Solver {
         Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts); });
+        std::thread monitor([this, start_ts]() { Monitor(start_ts, verbosity, level, states, queue, deadlock_db, counters); });
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
