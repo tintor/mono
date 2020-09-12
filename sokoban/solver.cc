@@ -711,7 +711,7 @@ Solution InternalSolve(const Level* level, const SolverOptions& options) {
 
 Solution Solve(const Level* level, const SolverOptions& options) {
 #define DENSE(N) \
-    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", 32 * N); return InternalSolve<DenseBoxes<32 * N>>(level, options); }
+    if (level->num_alive <= 32 * N) { print("Using DenseBoxes<{}>\n", N); return InternalSolve<DenseBoxes<N>>(level, options); }
 
     DENSE(1);
     DENSE(2);

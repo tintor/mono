@@ -83,6 +83,8 @@ struct DenseBoxes {
     array_bool<32 * Words> data;
 };
 
+using BigBoxes = DenseBoxes<32>;
+
 namespace std {
 
 template <typename T, size_t Size>
