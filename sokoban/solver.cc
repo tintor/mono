@@ -250,7 +250,6 @@ void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const
         else_ticks -= q.corral_ticks;
         else_ticks -= q.corral2_ticks;
         else_ticks -= q.is_simple_deadlock_ticks;
-        else_ticks -= q.is_reversible_push_ticks;
         else_ticks -= q.contains_frozen_boxes_ticks;
         else_ticks -= q.norm_ticks;
         else_ticks -= q.states_query_ticks;
@@ -404,7 +403,7 @@ struct Solver {
         ns.boxes.reset(b->id);
         ns.boxes.set(c->id);
 
-        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, q)) return false;
+        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return false;
 
         Timestamp norm_ts;
         normalize(level, ns);
@@ -573,7 +572,7 @@ struct AltSolver {
         ns.boxes.reset(b->id);
         ns.boxes.set(c->id);
 
-        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, d, q)) return false;
+        if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return false;
 
         Timestamp norm_ts;
         normalize(level, ns);

@@ -211,16 +211,11 @@ public:
     void add_deadlock(const int agent, const Boxes& boxes) {
     }
 
-    bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, const int push_dir, Counters& q) {
+    bool is_deadlock(const int agent, const Boxes& boxes, const Cell* pushed_box, Counters& q) {
         Timestamp deadlock_ts;
         if (TIMER(is_simple_deadlock(pushed_box, boxes), q.is_simple_deadlock_ticks)) {
             q.simple_deadlocks += 1;
             return true;
-        }
-
-        if (TIMER(is_reversible_push(_level->cells[agent], boxes, push_dir), q.is_reversible_push_ticks)) {
-            q.reversible_pushes += 1;
-            return false;
         }
 
         if (TIMER(_patterns.matches(agent, boxes), q.db_contains_pattern_ticks)) {
