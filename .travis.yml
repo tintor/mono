@@ -1,0 +1,8 @@
+language: cpp
+os: osx
+osx_image: xcode10.1
+compiler: clang
+
+before_install:
+    - brew install bazel
+	- brew upgrade bazel
