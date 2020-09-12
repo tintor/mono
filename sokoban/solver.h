@@ -10,7 +10,7 @@ struct SolverOptions {
     int verbosity = 2;
     bool single_thread = false;
     int dist_w = 1;
-    int heur_w = 1;
+    int heur_w = 2;
     bool alt = false;
 };
 
