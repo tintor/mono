@@ -54,12 +54,20 @@ using State = TState<DenseBoxes<1>>;
 
 struct Solved {};
 
-bool IsSolveable(const LevelEnv& env) {
+struct Cache {
+    flat_hash_set<ulong> solveable;
+    flat_hash_set<ulong> unsolveable;
+};
+
+bool IsSolveable(const LevelEnv& env, ulong icode, Cache* cache) {
+    if (cache->solveable.contains(icode)) return true;
+    if (cache->unsolveable.contains(icode)) return false;
+
     const Level* level = LoadLevel(env, /*extra*/false);
     State start = level->start;
     normalize(level, start);
 
-    absl::flat_hash_set<State> visited;
+    flat_hash_set<State> visited;
     vector<State> remaining;
     visited.insert(start);
     remaining.push_back(start);
@@ -84,8 +92,10 @@ bool IsSolveable(const LevelEnv& env) {
                 remaining.push_back(ns);
             });
         }
+        cache->unsolveable.insert(icode);
         return false;
     } catch (Solved) {
+        cache->solveable.insert(icode);
         return true;
     }
 }
@@ -185,31 +195,25 @@ bool Has2x2Deadlock(const LevelEnv& e) {
     return false;
 }
 
-bool IsMinimal(const LevelEnv& e, int num_boxes) {
+bool IsMinimal(const LevelEnv& e, ulong icode, Cache* cache, int num_boxes) {
     const int rows = e.wall.rows() - 4;
     const int cols = e.wall.cols() - 4;
 
-    LevelEnv o;
+    LevelEnv o = e;
+    ulong p = 1;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             if (num_boxes > 1 && Box(e, r, c)) {
-                o = e;
-                o.box(r + 2, c + 2) = false; // remove box
-                if (!IsSolveable(o)) {
-                    return false;
-                }
-                /*o.wall(r + 2, c + 2) = true; // replace box with wall
-                if (!Has2x2Deadlock(o) && !IsSolveable(o)) {
-                    return false;
-                }*/
+                o.box(r + 2, c + 2) = false;
+                if (!IsSolveable(o, icode - p, cache)) return false;
+                o.box(r + 2, c + 2) = true;
             }
             if (Wall(e, r, c)) {
-                o = e;
-                o.wall(r + 2, c + 2) = false; // remove wall
-                if (!IsSolveable(o)) {
-                    return false;
-                }
+                o.wall(r + 2, c + 2) = false;
+                if (!IsSolveable(o, icode - p * 2, cache)) return false;
+                o.wall(r + 2, c + 2) = true;
             }
+            p *= 3;
         }
     }
     return true;
@@ -219,6 +223,7 @@ void FindAll(int rows, int cols) {
     LevelEnv env = MakeEnv(rows, cols);
     ulong icode_max = std::pow(3, rows * cols) - 1;
 
+    Cache cache;
     int count = 0;
     vector<char> code(rows * cols, 0);
     ulong icode = 0;
@@ -232,8 +237,8 @@ void FindAll(int rows, int cols) {
         if (HasFreeCornerBox(env)) continue;
         if (Has2x2Deadlock(env)) continue;
         // TODO symmetry
-        if (IsSolveable(env)) continue;
-        if (!IsMinimal(env, num_boxes)) continue;
+        if (IsSolveable(env, icode, &cache)) continue;
+        if (!IsMinimal(env, icode, &cache, num_boxes)) continue;
 
         count += 1;
         env.Print(false);
@@ -249,7 +254,7 @@ int main(int argc, char* argv[]) {
     FindAll(2, 5);
     FindAll(3, 4);
     FindAll(3, 5);
-    //FindAll(4, 4);
-    //FindAll(4, 5);
+    FindAll(4, 4);
+    FindAll(4, 5);
     return 0;
 }
