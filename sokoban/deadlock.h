@@ -353,9 +353,6 @@ private:
                 visitor.add(b);
             }
 
-        // TODO this seems wrong!
-        if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) { return {Result::NotFrozen, 3}; }
-
         // Slow-path (clear visitor after each push)
         visitor.clear();
         visitor.add(agent);

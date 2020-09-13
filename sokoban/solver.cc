@@ -278,11 +278,22 @@ void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Leve
 
             int shard = StateMap<State>::shard(s);
             states.lock(shard);
-            const StateInfo* q = states.query(s, shard);
+            const StateInfo* si = states.query(s, shard);
             states.unlock(shard);
-            print("distance {}, heuristic {}\n", q->distance, q->heuristic);
+            print("distance {}, heuristic {}\n", si->distance, si->heuristic);
             corrals.find_unsolved_picorral(s);
             PrintWithCorral(level, s, corrals.opt_picorral());
+
+            /*for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
+                const Cell* c = b->dir(d);
+                if (corrals.has_picorral() && !corrals.picorral()[c->id]) return;
+                State ns(b->id, s.boxes);
+                ns.boxes.reset(b->id);
+                ns.boxes.set(c->id);
+                if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return;
+                print("child: dist {}, heur {}\n", si->distance + 1, heuristic(level, ns.boxes));
+                Print(level, ns);
+            });*/
             break;
         }
     }
@@ -458,6 +469,7 @@ struct Solver {
             deadlock_db.add_deadlock(ns.agent, ns.boxes);
             return false;
         }
+        if (h > std::numeric_limits<decltype(nsi.heuristic)>::max()) THROW(runtime_error, "heuristic overflow {}", h);
         nsi.heuristic = h;
 
         nsi.prev_agent = b->dir(d ^ 2)->id;
@@ -638,6 +650,7 @@ struct AltSolver {
             deadlock_db.add_deadlock(ns.agent, ns.boxes);
             return false;
         }
+        if (h > std::numeric_limits<decltype(nsi.heuristic)>::max()) THROW(runtime_error, "heuristic overflow {}", h);
         nsi.heuristic = h;
 
         nsi.prev_agent = b->dir(d ^ 2)->id;
