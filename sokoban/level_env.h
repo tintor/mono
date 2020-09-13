@@ -9,8 +9,10 @@ struct LevelEnv {
     matrix<bool> wall;
     matrix<bool> box;
     matrix<bool> goal;
+    matrix<bool> sink;
     int2 agent;
 
+    void Reset(int rows, int cols);
     void Load(std::string_view filename);
     bool IsValid() const; // Valid doesn't imply solvable!
     void Print() const;

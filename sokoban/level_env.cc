@@ -68,14 +68,7 @@ static vector<string> LoadLevelLines(string_view filename) {
     return lines;
 }
 
-void LevelEnv::Load(string_view filename) {
-    name = filename;
-    auto lines = LoadLevelLines(filename);
-
-    int cols = 0;
-    for (const string& s : lines) cols = std::max(cols, int(s.size()));
-    int rows = lines.size();
-
+void LevelEnv::Reset(int rows, int cols) {
     wall.resize(rows, cols);
     wall.fill(false);
 
@@ -85,7 +78,21 @@ void LevelEnv::Load(string_view filename) {
     goal.resize(rows, cols);
     goal.fill(false);
 
+    sink.resize(rows, cols);
+    sink.fill(false);
+
     agent = {-1, -1};
+}
+
+void LevelEnv::Load(string_view filename) {
+    name = filename;
+    auto lines = LoadLevelLines(filename);
+
+    int cols = 0;
+    for (const string& s : lines) cols = std::max(cols, int(s.size()));
+    int rows = lines.size();
+
+    Reset(rows, cols);
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
             char c = (col < lines[row].size()) ? lines[row][col] : Code::Space;
