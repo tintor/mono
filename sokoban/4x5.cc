@@ -146,19 +146,40 @@ bool HasFreeCornerBox(const LevelEnv& env) {
     return false;
 }
 
+bool HasWallCorner(const LevelEnv& e) {
+    const int re = e.wall.rows() - 5;
+    const int ce = e.wall.cols() - 5;
+    if (Wall(e, 0, 0) && Wall(e, 0, 1) && Wall(e, 1, 0)) return true;
+    if (Wall(e, re, 0) && Wall(e, re-1, 0) && Wall(e, re, 1)) return true;
+    if (Wall(e, 0, ce) && Wall(e, 0, ce-1) && Wall(e, 1, ce)) return true;
+    if (Wall(e, re, ce) && Wall(e, re-1, ce) && Wall(e, re, ce-1)) return true;
+    return false;
+}
+
 bool Has2x2Deadlock(const LevelEnv& e) {
     const int rows = e.wall.rows() - 4;
     const int cols = e.wall.cols() - 4;
     for (int r = 0; r < rows - 1; r++) {
         for (int c = 0; c < cols - 1; c++) {
-            if (Box(e, r, c) || Box(e, r+1, c) || Box(e, r, c+1) || Box(e, r+1, c+1)) {
-                if (!Empty(e, r, c) && !Empty(e, r+1, c) && !Empty(e, r, c+1) && !Empty(e, r+1, c+1)) return true;
+            int boxes = 0;
+            if (Box(e, r, c)) boxes += 1;
+            if (Box(e, r+1, c)) boxes += 1;
+            if (Box(e, r, c+1)) boxes += 1;
+            if (Box(e, r+1, c+1)) boxes += 1;
+            if (boxes == 0) continue;
 
-                if (Box(e, r, c) && Wall(e, r+1, c) && Wall(e, r, c+1)) return true;
-                if (Box(e, r+1, c) && Wall(e, r, c) && Wall(e, r+1, c+1)) return true;
-                if (Box(e, r, c+1) && Wall(e, r+1, c+1) && Wall(e, r, c)) return true;
-                if (Box(e, r+1, c+1) && Wall(e, r, c+1) && Wall(e, r+1, c)) return true;
-            }
+            // One box and two diagonal walls
+            if (Wall(e, r+1, c) && Wall(e, r, c+1)) return true;
+            if (Wall(e, r, c) && Wall(e, r+1, c+1)) return true;
+
+            int walls = 0;
+            if (Wall(e, r, c)) walls += 1;
+            if (Wall(e, r+1, c)) walls += 1;
+            if (Wall(e, r, c+1)) walls += 1;
+            if (Wall(e, r+1, c+1)) walls += 1;
+
+            if (walls == 2 && boxes == 2) return true;
+            if (walls + boxes == 4) return true;
         }
     }
     return false;
@@ -177,13 +198,16 @@ void FindAll(int rows, int cols) {
         if (num_boxes == 0) continue;
         Apply(code, &env);
         if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
+        if (HasWallCorner(env)) continue;
         if (HasFreeCornerBox(env)) continue;
         if (Has2x2Deadlock(env)) continue;
+        // TODO symmetry
         if (IsSolveable(env)) continue;
+        // TODO minimal
 
         count += 1;
         env.Print(false);
-        print("progress {}\n\n", double(icode) / icode_max);
+        print("progress {}\n", double(icode) / icode_max);
     }
     print("{} x {} -> {}\n", rows, cols, count);
 }
@@ -194,8 +218,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
-    FindAll(4, 4);
-    FindAll(3, 5);
-    FindAll(4, 5);
+    //FindAll(4, 4);
+    //FindAll(3, 5);
+    //FindAll(4, 5);
     return 0;
 }
