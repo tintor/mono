@@ -81,14 +81,55 @@ struct Boxes32 {
     T data = 0;
 };
 
-using State = TState<Boxes32>;
+ulong Encode(const LevelEnv& e, int transform) {
+    ulong a = 0;
+    ulong p = 1;
 
-struct Solved {};
+    const int cols = e.wall.cols() - 4;
+    const int rows = e.wall.rows() - 4;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            int2 m = {c, r};
+            if (transform & 1) {
+                // mirror x
+                m = {cols - 1 - m.x, m.y};
+            }
+            if (transform & 2) {
+                // mirror y
+                m = {m.x, rows - 1 - m.y};
+            }
+            if (transform & 4) {
+                // transpose
+                m = {m.y, m.x};
+            }
+            m += {2, 2};
+            if (e.box(m)) a += p;
+            if (e.wall(m)) a += 2 * p;
+            p *= 3;
+        }
+    }
+    return a;
+}
 
-struct Cache {
-    flat_hash_set<ulong> solveable;
-    flat_hash_set<ulong> unsolveable;
-};
+int Transforms(const LevelEnv& e) {
+    return (e.wall.cols() == e.wall.rows()) ? 8 : 4;
+}
+
+bool IsCanonical(const LevelEnv& e, ulong icode) {
+    const int transforms = Transforms(e);
+    for (int i = 0; i < transforms; i++) {
+        ulong a = Encode(e, i);
+        if (a < icode) return false;
+    }
+    return true;
+}
+
+ulong Canonical(const LevelEnv& e) {
+    const int transforms = Transforms(e);
+    ulong a = -1;
+    for (int i = 0; i < transforms; i++) a = std::min(a, Encode(e, i));
+    return a;
+}
 
 bool HasFreeBox(const LevelEnv& e) {
     // Compute agent reachability
@@ -130,17 +171,32 @@ bool HasFreeBox(const LevelEnv& e) {
     return false;
 }
 
-bool IsSolveable(const LevelEnv& env, ulong icode, Cache* cache) {
-    if (cache->solveable.contains(icode)) return true;
-    if (cache->unsolveable.contains(icode)) return false;
+using State = TState<Boxes32>;
+
+struct Solved {};
+
+struct Solver {
+    bool IsSolveable(const LevelEnv& env, ulong icode);
+
+    flat_hash_set<State> visited;
+    vector<State> remaining;
+
+    flat_hash_set<ulong> solveable;
+    flat_hash_set<ulong> unsolveable;
+};
+
+bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
+    ulong canonical_icode = Canonical(env);
+    if (solveable.contains(canonical_icode)) return true;
+    if (unsolveable.contains(canonical_icode)) return false;
 
     const Level* level = LoadLevel(env, /*extra*/false);
     if (level->num_alive > 32) THROW(runtime_error, "num_alive > 32");
     State start = level->start;
     normalize(level, start);
 
-    flat_hash_set<State> visited;
-    vector<State> remaining;
+    visited.clear();
+    remaining.clear();
     visited.insert(start);
     remaining.push_back(start);
 
@@ -164,12 +220,16 @@ bool IsSolveable(const LevelEnv& env, ulong icode, Cache* cache) {
                 remaining.push_back(ns);
             });
         }
-        cache->unsolveable.insert(icode);
-        return false;
     } catch (Solved) {
-        cache->solveable.insert(icode);
+        solveable.insert(canonical_icode);
         return true;
     }
+
+    unsolveable.insert(canonical_icode);
+    //for (const State& s : visited) {
+        // TODO encode state and insert into unsolveable
+    //}
+    return false;
 }
 
 // empty or one box
@@ -276,7 +336,7 @@ bool Has2x2Deadlock(const LevelEnv& e) {
     return false;
 }
 
-bool IsMinimal(const LevelEnv& e, ulong icode, Cache* cache, int num_boxes) {
+bool IsMinimal(const LevelEnv& e, ulong icode, Solver* solver, int num_boxes) {
     const int rows = e.wall.rows() - 4;
     const int cols = e.wall.cols() - 4;
 
@@ -286,14 +346,14 @@ bool IsMinimal(const LevelEnv& e, ulong icode, Cache* cache, int num_boxes) {
         for (int c = 0; c < cols; c++) {
             if (num_boxes > 1 && Box(e, r, c)) {
                 o.box(r + 2, c + 2) = false;
-                if (!IsSolveable(o, icode - p, cache)) return false;
+                if (!solver->IsSolveable(o, icode - p)) return false;
                 o.box(r + 2, c + 2) = true;
             }
             if (Wall(e, r, c)) {
                 o.wall(r + 2, c + 2) = false; // remove wall
-                if (!IsSolveable(o, icode - p * 2, cache)) return false;
+                if (!solver->IsSolveable(o, icode - p * 2)) return false;
                 o.box(r + 2, c + 2) = true; // wall -> box
-                if (!IsSolveable(o, icode - p, cache)) return false;
+                if (!solver->IsSolveable(o, icode - p)) return false;
                 o.box(r + 2, c + 2) = false;
                 o.wall(r + 2, c + 2) = true;
             }
@@ -307,24 +367,30 @@ void FindAll(int rows, int cols) {
     LevelEnv env = MakeEnv(rows, cols);
     ulong icode_max = std::pow(3, rows * cols) - 1;
 
-    Cache cache;
+    Solver solver;
     int count = 0;
     vector<char> code(rows * cols, 0);
     ulong icode = 0;
     int num_boxes = 0;
 
     Timestamp start_ts;
-    std::atomic<bool> running = true;
+    std::atomic<bool> running = false;
     std::thread monitor([&]() {
         while (running) {
             for (int i = 0; i < 10; i++) {
                 std::this_thread::sleep_for(500ms);
                 if (!running) return;
             }
-            double elapsed = start_ts.elapsed_s();
+
             double progress = double(icode) / icode_max;
+            print("progress {}", progress);
+            print(", solvable {}", solver.solveable.size());
+            print(", unsolveable {}", solver.unsolveable.size());
+            print(", patterns {}", count);
+
+            double elapsed = start_ts.elapsed_s();
             double eta = (1 - progress) * elapsed / progress;
-            print("progress {}, solvable {}, unsolveable {}, patterns {}, ETA {} hours\n", progress, cache.solveable.size(), cache.unsolveable.size(), count, eta / 3600);
+            print(", ETA {} hours\n", eta / 3600);
         }
     });
 
@@ -337,8 +403,9 @@ void FindAll(int rows, int cols) {
         if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
         if (Has2x2Deadlock(env)) continue;
         if (HasFreeBox(env)) continue;
-        if (IsSolveable(env, icode, &cache)) continue;
-        if (!IsMinimal(env, icode, &cache, num_boxes)) continue;
+        if (!IsCanonical(env, icode)) continue;
+        if (solver.IsSolveable(env, icode)) continue;
+        if (!IsMinimal(env, icode, &solver, num_boxes)) continue;
 
         count += 1;
         env.Print(false);
@@ -355,8 +422,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
-    FindAll(3, 5);
-    FindAll(4, 4);
-    FindAll(4, 5);
+    //FindAll(3, 5);
+    //FindAll(4, 4);
+    //FindAll(4, 5);
     return 0;
 }
