@@ -51,8 +51,36 @@ void Apply(const vector<char>& code, LevelEnv* env) {
     }
 }
 
-// TODO DenseBoxes based on single ulong!
-using State = TState<DenseBoxes<1>>;
+struct Boxes32 {
+    using T = ulong;
+
+    bool operator[](uint index) const { return index < 32 && (data | mask(index)) == data; }
+
+    void set(uint index) {
+        if (index >= 32) THROW(runtime_error, "out of range");
+        data |= mask(index);
+    }
+
+    void reset(uint index) {
+        if (index >= 32) THROW(runtime_error, "out of range");
+        data &= ~mask(index);
+    }
+
+    void reset() { data = 0; }
+
+    size_t hash() const { return data; }
+
+    bool operator==(const Boxes32 o) const { return data == o.data; }
+
+    bool contains(const Boxes32 o) const { return (data | o.data) == data; }
+
+   private:
+    static T mask(uint index) { return T(1) << index; }
+
+    T data = 0;
+};
+
+using State = TState<Boxes32>;
 
 struct Solved {};
 
@@ -61,11 +89,52 @@ struct Cache {
     flat_hash_set<ulong> unsolveable;
 };
 
+bool HasFreeBox(const LevelEnv& e) {
+    // Compute agent reachability
+    matrix<char> reachable;
+    reachable.resize(e.wall.rows(), e.wall.cols());
+    reachable.fill(false);
+    vector<int2> remaining = {{1, 1}};
+    reachable(1, 1) = true;
+    while (remaining.size() > 0) {
+        int2 a = remaining.back();
+        remaining.pop_back();
+        for (int2 d : {int2{1,0}, {-1,0}, {0,1}, {0,-1}}) {
+            int2 b = a + d;
+            if (!e.wall(b) && !e.box(b) && !reachable(b)) {
+                remaining.push_back(b);
+                reachable(b) = true;
+            }
+        }
+    }
+
+    // Look for boxes which are reachable and pushable
+    for (int r = 2; r < e.wall.rows() - 2; r++) {
+        for (int c = 0; c < e.wall.cols() - 2; c++) {
+            int2 b = {c + 2, r + 2};
+            if (e.box(b)) {
+                for (int2 d : {int2{1,0}, {-1,0}, {0,1}, {0,-1}}) {
+                    if (reachable(b - d)) {
+                        int2 a = b;
+                        while (true) {
+                            a += d;
+                            if (e.sink(a)) return true;
+                            if (e.wall(a) || e.box(a)) break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 bool IsSolveable(const LevelEnv& env, ulong icode, Cache* cache) {
     if (cache->solveable.contains(icode)) return true;
     if (cache->unsolveable.contains(icode)) return false;
 
     const Level* level = LoadLevel(env, /*extra*/false);
+    if (level->num_alive > 32) THROW(runtime_error, "num_alive > 32");
     State start = level->start;
     normalize(level, start);
 
@@ -158,6 +227,15 @@ bool HasFreeCornerBox(const LevelEnv& env) {
     return false;
 }
 
+// Looks for this pattern:
+// ???
+// #??
+// ##?
+
+// TODO also:
+// ???
+// ..?
+// #.?
 bool HasWallCorner(const LevelEnv& e) {
     const int re = e.wall.rows() - 5;
     const int ce = e.wall.cols() - 5;
@@ -238,20 +316,22 @@ void FindAll(int rows, int cols) {
             print("progress {}, solvable {}, unsolveable {}, patterns {}\n", double(icode) / icode_max, cache.solveable.size(), cache.unsolveable.size(), count);
         }
     });
+
     while (Increment(code, &num_boxes)) {
         icode += 1;
         if (num_boxes < 2) continue;
         Apply(code, &env);
-        if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
         if (HasWallCorner(env)) continue;
         if (HasFreeCornerBox(env)) continue;
+        if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
         if (Has2x2Deadlock(env)) continue;
-        // TODO symmetry
+        if (HasFreeBox(env)) continue;
         if (IsSolveable(env, icode, &cache)) continue;
         if (!IsMinimal(env, icode, &cache, num_boxes)) continue;
 
         count += 1;
-        //env.Print(false);
+        env.Print(false);
+        print("\n");
     }
     running = false;
     monitor.join();
@@ -264,8 +344,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
-    FindAll(3, 5);
-    FindAll(4, 4);
-    FindAll(4, 5);
+    //FindAll(3, 5);
+    //FindAll(4, 4);
+    //FindAll(4, 5);
     return 0;
 }

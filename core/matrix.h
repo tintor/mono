@@ -26,8 +26,9 @@ class matrix {
         _data.resize(s, value);
     }
 
-    auto operator()(int2 v) const { return operator()(v.y, v.x); }
-    auto operator()(int2 v) { return operator()(v.y, v.x); }
+    typename std::vector<T>::const_reference operator()(int2 v) const { return operator()(v.y, v.x); }
+
+    typename std::vector<T>::reference operator()(int2 v) { return operator()(v.y, v.x); }
 
     typename std::vector<T>::const_reference operator()(int row, int col) const {
         if (row < 0 || row >= _dim_a || col < 0 || col >= _dim_b) THROW(invalid_argument);
