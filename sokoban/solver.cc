@@ -227,9 +227,9 @@ Solution ExtractSolution(pair<State, StateInfo> s, const Level* level, const Sta
 }
 
 template <typename State, typename Queue>
-void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const Queue& queue, DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
+void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Level* level, const StateMap<State>& states, const Queue& queue, DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
     Corrals<State> corrals(level);
-    bool running = verbosity > 0;
+    bool running = options.verbosity > 0 && options.monitor;
     if (!running) return;
 
     while (running) {
@@ -264,7 +264,7 @@ void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const
         print(" states [{}]", states.monitor());
         print(" queue [{}]", queue.monitor());
         print("\n");
-        if (verbosity < 2) continue;
+        if (options.verbosity < 2) continue;
 
         while (true) {
             auto ss = queue.top();
@@ -493,7 +493,7 @@ struct Solver {
         Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts, options.verbosity, level, states, queue, deadlock_db, counters); });
+        std::thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
@@ -661,7 +661,7 @@ struct AltSolver {
         Protected<optional<pair<State, StateInfo>>> result;
 
         counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts, options.verbosity, level, states, queue, deadlock_db, counters); });
+        std::thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
 
         Corrals<State> corrals(level);
         vector<std::future<bool>> results;

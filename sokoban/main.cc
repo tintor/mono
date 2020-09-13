@@ -129,6 +129,7 @@ int main(int argc, char** argv) {
         ("verbosity", po::value<int>(&options.verbosity), "")
         ("dist_w", po::value<int>(&options.dist_w), "")
         ("heur_w", po::value<int>(&options.heur_w), "")
+        ("monitor", po::value<bool>(&options.monitor), "")
         ("deadlocks", po::value<string>(), "")
         ("scan", po::value<string>(), "")
         ("open", po::value<string>(), "")
