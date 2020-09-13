@@ -503,6 +503,10 @@ struct Solver {
     optional<pair<State, StateInfo>> Solve(State start, bool pre_normalize = true) {
         if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
         Timestamp start_ts;
+        optional<Timestamp> end_ts;
+        if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
+        std::atomic<bool> timed_out = false;
+
         if (pre_normalize) normalize(level, start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
         queue.push(start, 0);
@@ -524,6 +528,11 @@ struct Solver {
                 Timestamp queue_pop_ts;
                 ON_SCOPE_EXIT(q.total_ticks += queue_pop_ts.elapsed());
 
+                if (end_ts.has_value() && Timestamp().ticks() >= end_ts->ticks()) {
+                    queue.shutdown();
+                    timed_out = true;
+                    break;
+                }
                 auto p = queue_pop();
                 if (!p) return;
                 const State& s = p->first;
@@ -551,6 +560,7 @@ struct Solver {
             }
         });
         monitor.join();
+        if (timed_out) print(warning, "Out of time!\n");
         return result._data;
     }
 };
@@ -677,6 +687,9 @@ struct AltSolver {
     optional<pair<State, StateInfo>> Solve(State start, bool pre_normalize = true) {
         if (concurrency == 1) print(warning, "Warning: Single-threaded!\n");
         Timestamp start_ts;
+        optional<Timestamp> end_ts;
+        if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
+
         if (pre_normalize) normalize(level, start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
         queue.push(start, 0);
@@ -694,6 +707,11 @@ struct AltSolver {
             Timestamp queue_pop_ts;
             Counters q; // TODO fixme
             ON_SCOPE_EXIT(q.total_ticks += queue_pop_ts.elapsed());
+
+            if (end_ts.has_value() && Timestamp().ticks() >= end_ts->ticks()) {
+                print(warning, "Out of time!\n");
+                break;
+            }
 
             auto p = queue_pop();
             if (!p) return std::nullopt;

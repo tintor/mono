@@ -16,6 +16,8 @@ struct Timestamp {
     static double to_s(ulong ticks) { return ticks * _ms_per_tick * 1e-3; }
     static double ms_per_tick() { return _ms_per_tick; }
 
+    ulong ticks() const { return _ticks; }
+
    private:
     ulong _ticks;
     static double _ms_per_tick;

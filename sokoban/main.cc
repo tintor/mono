@@ -42,6 +42,7 @@ void mark_level_solved(string_view name) {
 struct Options : public SolverOptions {
     bool unsolved = false;
     bool animate = false;
+    bool must_solve = true;
 };
 
 string Solve(string_view file, const Options& options) {
@@ -98,7 +99,7 @@ string Solve(string_view file, const Options& options) {
             }
         } else {
             print("{}: no solution!\n", name);
-            THROW(runtime_error2, "no solution");
+            if (options.must_solve) THROW(runtime_error2, "no solution");
             unique_lock g(levels_lock);
             unsolved.emplace_back(split(name, {':', '/'}).back());
         }
@@ -122,6 +123,7 @@ int main(int argc, char** argv) {
     Options options;
     po::options_description desc("Allowed options");
     desc.add_options()
+        ("max_time", po::value<int>(&options.max_time), "")
         ("debug", po::bool_switch(&options.debug), "")
         ("alt", po::bool_switch(&options.alt), "")
         ("animate", po::bool_switch(&options.animate), "")
@@ -130,6 +132,7 @@ int main(int argc, char** argv) {
         ("verbosity", po::value<int>(&options.verbosity), "")
         ("dist_w", po::value<int>(&options.dist_w), "")
         ("heur_w", po::value<int>(&options.heur_w), "")
+        ("must_solve", po::value<bool>(&options.must_solve), "")
         ("monitor", po::value<bool>(&options.monitor), "")
         ("deadlocks", po::value<string>(), "")
         ("scan", po::value<string>(), "")

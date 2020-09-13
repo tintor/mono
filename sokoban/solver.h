@@ -14,6 +14,7 @@ struct SolverOptions {
     bool alt = false;
     bool monitor = true;
     bool debug = false;
+    int max_time = 0;
 };
 
 std::pair<std::vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options);
