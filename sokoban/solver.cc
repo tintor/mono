@@ -472,6 +472,11 @@ struct Solver {
         queue.push(ns, int(nsi.distance) * options.dist_w + int(nsi.heuristic) * options.heur_w);
         q.queue_push_ticks += queue_push_ts.elapsed();
 
+        if (options.debug) {
+            print("child:\n");
+            Print(level, ns);
+        }
+
         if (goals.contains(ns.boxes)) {
             queue.shutdown();
             auto& result = *ws.result;
@@ -510,6 +515,11 @@ struct Solver {
                 const State& s = p->first;
                 if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) continue;
                 const StateInfo& si = p->second;
+
+                if (options.debug) {
+                    print("popped:\n");
+                    Print(level, s);
+                }
 
                 // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
                 // -> if that doesn't work then do a regular search

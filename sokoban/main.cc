@@ -122,6 +122,7 @@ int main(int argc, char** argv) {
     Options options;
     po::options_description desc("Allowed options");
     desc.add_options()
+        ("debug", po::bool_switch(&options.debug), "")
         ("alt", po::bool_switch(&options.alt), "")
         ("animate", po::bool_switch(&options.animate), "")
         ("single-thread", po::bool_switch(&options.single_thread), "")

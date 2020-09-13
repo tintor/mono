@@ -13,6 +13,7 @@ struct SolverOptions {
     int heur_w = 2;
     bool alt = false;
     bool monitor = true;
+    bool debug = false;
 };
 
 std::pair<std::vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options);
