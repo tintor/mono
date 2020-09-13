@@ -565,6 +565,7 @@ struct Solver {
     }
 };
 
+#if 0
 template <typename State>
 struct AltSolver {
     using Boxes = typename State::Boxes;
@@ -741,15 +742,18 @@ struct AltSolver {
         return result._data;
     }
 };
+#endif
 
 template <typename Boxes>
 Solution InternalSolve(const Level* level, const SolverOptions& options) {
     if (options.verbosity > 0) PrintInfo(level);
 
-    if (options.alt) {
+    if (false && options.alt) {
+#if 0
         AltSolver<TState<Boxes>> solver(level, options);
         auto solution = solver.Solve(level->start);
         if (solution) return ExtractSolution(*solution, level, solver.states);
+#endif
     } else {
         Solver<TState<Boxes>> solver(level, options);
         auto solution = solver.Solve(level->start);
@@ -766,10 +770,10 @@ Solution Solve(const Level* level, const SolverOptions& options) {
     DENSE(2);
     DENSE(3);
     DENSE(4);
-    DENSE(5);
-    DENSE(6);
-    DENSE(7);
-    DENSE(8);
+//    DENSE(5);
+//    DENSE(6);
+//    DENSE(7);
+//    DENSE(8);
 #undef DENSE
 
     print(warning, "Warning: Using DynamicBoxes\n");
