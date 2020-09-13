@@ -14,6 +14,9 @@ struct Cell {
     bool sink;
     bool alive;
 
+    int goal_penalty = 0;
+
+    // TODO unused
     int dead_region_id; // if alive then same as id, otherwise min id of all cells in dead region
     Exits exits;
 

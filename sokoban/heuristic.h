@@ -3,29 +3,12 @@
 #include "sokoban/level.h"
 #include "sokoban/util.h"
 
-inline int AliveInDir(const Level* level, const Cell* a, int dir) {
-    int c = 0;
-    while (a->dir(dir) && a->dir(dir)->alive) {
-        c += 1;
-        a = a->dir(dir);
-        if (c > 100) THROW(runtime_error, "alive in dir");
-    }
-    return c;
-}
-
-inline int Penalty(const Level* level, const Cell* a) {
-    if (!a->goal) return 5;
-    int ver = min(AliveInDir(level, a, 1), AliveInDir(level, a, 3));
-    int hor = min(AliveInDir(level, a, 0), AliveInDir(level, a, 2));
-    return min(5, ver + hor);
-}
-
 template<typename Boxes>
 uint heuristic_simple(const Level* level, const Boxes& boxes) {
     uint cost = 0;
     for (const Cell* box : level->alive()) {
         if (!boxes[box->id]) continue;
-        cost += box->min_push_distance + Penalty(level, box);
+        cost += box->min_push_distance + box->goal_penalty;
     }
     return cost;
 }
@@ -49,7 +32,7 @@ uint heuristic(const Level* level, const Boxes& boxes) {
             if (dist == Cell::Inf) return Cell::Inf;
             cost += dist;
         }
-        cost += Penalty(level, box);
+        cost += box->goal_penalty;
     }
     return cost;
 }

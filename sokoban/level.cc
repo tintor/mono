@@ -357,6 +357,35 @@ void assign(DynamicBoxes& b, int index, bool value) {
         b.reset(index);
 }
 
+void ComputeGoalPenalties(Level* level) {
+    vector<int> goal_max_dist(level->num_goals, 0);
+    for (int i = 0; i < level->num_goals; i++) {
+        for (Cell* a : level->alive()) {
+            if (a->push_distance[i] != Cell::Inf) goal_max_dist[i] = std::max(goal_max_dist[i], int(a->push_distance[i]));
+        }
+    }
+
+    int next_penalty = 0;
+    while (true) {
+        int m = -1;
+        for (int i = 0; i < level->num_goals; i++) m = std::max(m, goal_max_dist[i]);
+        if (m == -1) break;
+
+        for (int i = 0; i < level->num_goals; i++) {
+            if (goal_max_dist[i] == m) {
+                level->cells[i]->goal_penalty = next_penalty;
+                goal_max_dist[i] = -1;
+            }
+        }
+        next_penalty += 1;
+    }
+
+    next_penalty -= 1;
+    for (int i = level->num_goals; i < level->num_alive; i++) {
+        level->cells[i]->goal_penalty = next_penalty;
+    }
+}
+
 const Level* LoadLevel(string_view filename) {
     LevelEnv env;
     env.Load(filename);
@@ -395,10 +424,11 @@ const Level* LoadLevel(const LevelEnv& env) {
         THROW(runtime_error, "agent(%s) on box", level->start.agent);
 
     ComputePushDistances(level);
+    ComputeGoalPenalties(level);
 
     /*string label;
     Print(level, level->start, [&label](auto e) {
-        label = format("{}", e->id);
+        if (e->goal_penalty > 99) label = "??"; else label = format("{}", e->goal_penalty);
         if (label.size() == 1) label = " " + label;
         return label;
     });*/
