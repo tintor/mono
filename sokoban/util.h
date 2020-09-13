@@ -167,7 +167,7 @@ void for_each_push(const Level* level, const State& s, const Push& push) {
                 continue;
             }
             const Cell* c = b->dir(d);
-            if (c && c->alive && !s.boxes[c->id]) push(a, b, d);
+            if (c && (c->alive || c->sink) && !s.boxes[c->id]) push(a, b, d);
         }
     }
 }

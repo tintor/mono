@@ -61,7 +61,7 @@ struct DenseBoxes {
     bool operator[](uint index) const { return index < data.size() && data[index]; }
 
     void set(uint index) {
-        if (index >= data.size()) THROW(runtime_error, "out of range");
+        if (index >= data.size()) THROW(runtime_error, "out of range {} : {}", index, data.size());
         data.set(index);
     }
 

@@ -102,7 +102,7 @@ struct Minimal {
     }
     bool alive(int xy) const {
         check(xy);
-        return empty(xy) || goal(xy) || sink(xy);
+        return empty(xy) || goal(xy);
     }
 
     void move_agent_from_deadend() {
@@ -272,7 +272,7 @@ struct Minimal {
             for (Cell* a : dead_region(cells, c)) {
                 for (int d = 0; d < 4; d++) {
                     Cell* b = a->_dir[d];
-                    if (b && b->alive && b != c) {
+                    if (b && (b->alive || b->sink) && b != c) {
                         c->actions.emplace_back(d, a->_dir[d]);
                     }
                 }
@@ -284,7 +284,7 @@ struct Minimal {
             for (Cell* a : dead_region(cells, c)) {
                 for (int d = 0; d < 4; d++) {
                     Cell* b = a->_dir[d];
-                    if (b && b->alive && a->_dir[d] != c) {
+                    if (b && (b->alive || b->sink) && a->_dir[d] != c) {
                         c->new_moves.emplace_back(a->_dir[d]);
                     }
                 }
@@ -296,12 +296,12 @@ struct Minimal {
         for (Cell* c : cells) {
             int p = 0;
             for (int d = 0; d < 4; d++) {
-                if (c->dir(d) && c->dir(d)->alive && c->dir(d ^ 2)) p += 1;
+                if (c->dir(d) && (c->dir(d)->alive || c->dir(d)->sink) && c->dir(d ^ 2)) p += 1;
             }
             c->pushes.resize(p);
             p = 0;
             for (int d = 0; d < 4; d++) {
-                if (c->dir(d) && c->dir(d)->alive && c->dir(d ^ 2)) {
+                if (c->dir(d) && (c->dir(d)->alive || c->dir(d)->sink) && c->dir(d ^ 2)) {
                     c->pushes[p++] = std::pair<Cell*, Cell*>(c->dir(d), c->dir(d ^ 2));
                 }
             }

@@ -185,6 +185,36 @@ bool Has2x2Deadlock(const LevelEnv& e) {
     return false;
 }
 
+bool IsMinimal(const LevelEnv& e, int num_boxes) {
+    const int rows = e.wall.rows() - 4;
+    const int cols = e.wall.cols() - 4;
+
+    LevelEnv o;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (num_boxes > 1 && Box(e, r, c)) {
+                o = e;
+                o.box(r + 2, c + 2) = false; // remove box
+                if (!IsSolveable(o)) {
+                    return false;
+                }
+                /*o.wall(r + 2, c + 2) = true; // replace box with wall
+                if (!Has2x2Deadlock(o) && !IsSolveable(o)) {
+                    return false;
+                }*/
+            }
+            if (Wall(e, r, c)) {
+                o = e;
+                o.wall(r + 2, c + 2) = false; // remove wall
+                if (!IsSolveable(o)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
 void FindAll(int rows, int cols) {
     LevelEnv env = MakeEnv(rows, cols);
     ulong icode_max = std::pow(3, rows * cols) - 1;
@@ -195,7 +225,7 @@ void FindAll(int rows, int cols) {
     int num_boxes = 0;
     while (Increment(code, &num_boxes)) {
         icode += 1;
-        if (num_boxes == 0) continue;
+        if (num_boxes < 2) continue;
         Apply(code, &env);
         if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
         if (HasWallCorner(env)) continue;
@@ -203,7 +233,7 @@ void FindAll(int rows, int cols) {
         if (Has2x2Deadlock(env)) continue;
         // TODO symmetry
         if (IsSolveable(env)) continue;
-        // TODO minimal
+        if (!IsMinimal(env, num_boxes)) continue;
 
         count += 1;
         env.Print(false);
@@ -218,8 +248,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
+    FindAll(3, 5);
     //FindAll(4, 4);
-    //FindAll(3, 5);
     //FindAll(4, 5);
     return 0;
 }
