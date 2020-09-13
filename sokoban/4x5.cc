@@ -3,7 +3,9 @@
 #include "sokoban/util.h"
 #include "core/fmt.h"
 #include "absl/container/flat_hash_set.h"
+#include <thread>
 
+using namespace std::chrono_literals;
 using std::vector;
 using absl::flat_hash_set;
 
@@ -228,6 +230,14 @@ void FindAll(int rows, int cols) {
     vector<char> code(rows * cols, 0);
     ulong icode = 0;
     int num_boxes = 0;
+
+    std::atomic<bool> running = true;
+    std::thread monitor([&]() {
+        while (running) {
+            std::this_thread::sleep_for(5s);
+            print("progress {}, solvable {}, unsolveable {}, patterns {}\n", double(icode) / icode_max, cache.solveable.size(), cache.unsolveable.size(), count);
+        }
+    });
     while (Increment(code, &num_boxes)) {
         icode += 1;
         if (num_boxes < 2) continue;
@@ -241,9 +251,10 @@ void FindAll(int rows, int cols) {
         if (!IsMinimal(env, icode, &cache, num_boxes)) continue;
 
         count += 1;
-        env.Print(false);
-        print("progress {}\n", double(icode) / icode_max);
+        //env.Print(false);
     }
+    running = false;
+    monitor.join();
     print("{} x {} -> {}\n", rows, cols, count);
 }
 
