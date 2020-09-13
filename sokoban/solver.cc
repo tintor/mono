@@ -280,7 +280,9 @@ void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Leve
             states.lock(shard);
             const StateInfo* si = states.query(s, shard);
             states.unlock(shard);
-            print("distance {}, heuristic {}\n", si->distance, si->heuristic);
+
+            int priority = int(si->distance) * options.dist_w + int(si->heuristic) * options.heur_w;
+            print("distance {}, heuristic {}, priority {}\n", si->distance, si->heuristic, priority);
             corrals.find_unsolved_picorral(s);
             PrintWithCorral(level, s, corrals.opt_picorral());
 
