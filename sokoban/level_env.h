@@ -15,7 +15,7 @@ struct LevelEnv {
     void Reset(int rows, int cols);
     void Load(std::string_view filename);
     bool IsValid() const; // Valid doesn't imply solvable!
-    void Print() const;
+    void Print(bool edge = true) const;
     void Unprint() const;
 
     bool Action(int2 delta, bool allow_move = true, bool allow_push = true);

@@ -152,9 +152,10 @@ string_view Emoji(bool wall, bool box, bool goal, bool agent, bool sink) {
     return "  ";
 }
 
-void LevelEnv::Print() const {
-    for (int r = 0; r < wall.rows(); r++) {
-        for (int c = 0; c < wall.cols(); c++) {
+void LevelEnv::Print(bool edge) const {
+    const int e = edge ? 0 : 2;
+    for (int r = e; r < wall.rows() - e; r++) {
+        for (int c = e; c < wall.cols() - e; c++) {
             int2 i{c, r};
             std::cout << Emoji(wall(i), box(i), goal(i), equal(agent, i), sink(i));
         }
