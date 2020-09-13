@@ -19,6 +19,14 @@ bool solved(const Level* level, const Boxes& boxes) {
 }
 
 template <typename Boxes>
+bool contains_goal_without_box(const Level* level, const Boxes& boxes) {
+    for (int i = 0; i < level->num_goals; i++) {
+        if (!boxes[i]) return false;
+    }
+    return true;
+}
+
+template <typename Boxes>
 bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, const Boxes& boxes) {
     for (int i = 0; i < level->goals().size(); i++) {
         if (!visitor.visited(i) && !boxes[i]) return false;
@@ -217,7 +225,10 @@ public:
             q.simple_deadlocks += 1;
             return true;
         }
+        return is_complex_deadlock(agent, boxes, q);
+    }
 
+    bool is_complex_deadlock(const int agent, const Boxes& boxes, Counters& q) {
         if (TIMER(_patterns.matches(agent, boxes), q.db_contains_pattern_ticks)) {
             q.db_deadlocks += 1;
             return true;
@@ -309,6 +320,8 @@ private:
     }
 
     Result contains_frozen_boxes(const Cell* agent, const Boxes& orig_boxes, Boxes& boxes, int& num_boxes, Counters& q) {
+        if (num_boxes == _level->num_goals && contains_goal_without_box(_level, boxes)) return Result::NotFrozen;
+
         // Fast-path
         AgentVisitor visitor(agent);
         for (const Cell* a : visitor)
@@ -338,7 +351,8 @@ private:
                 visitor.add(b);
             }
 
-        if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb2 += 1; return Result::NotFrozen; }
+        // TODO this seems wrong!
+        if (solved(_level, boxes) && all_empty_goals_are_reachable(_level, visitor, boxes)) { return Result::NotFrozen; }
 
         // Slow-path (clear visitor after each push)
         visitor.clear();
@@ -364,16 +378,16 @@ private:
                 }
 
                 // agent pushes box from B to C (and box disappears)
-                if (--num_boxes == 1) { q.fb3 += 1; return Result::NotFrozen; }
+                if (--num_boxes == 1) { q.fb2 += 1; return Result::NotFrozen; }
                 visitor.clear();  // <-- Necessary for edge cases.
                 visitor.add(b);
                 break; // <-- Necesary for edge cases.
             }
 
-        if (!solved(agent->level, boxes)) { q.fb4 += 1; return Result::Frozen; }
-        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb5 += 1; return Result::BlockedGoal; }
-        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) { q.fb6 += 1; return Result::BlockedGoal; }
-        q.fb7 += 1;
+        if (!solved(agent->level, boxes)) { q.fb3 += 1; return Result::Frozen; }
+        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb4 += 1; return Result::BlockedGoal; }
+        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) { q.fb5 += 1; return Result::BlockedGoal; }
+        q.fb6 += 1;
         return Result::NotFrozen;
     }
 

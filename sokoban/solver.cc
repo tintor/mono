@@ -227,7 +227,7 @@ Solution ExtractSolution(pair<State, StateInfo> s, const Level* level, const Sta
 }
 
 template <typename State, typename Queue>
-void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const Queue& queue, const DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
+void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const StateMap<State>& states, const Queue& queue, DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
     Corrals<State> corrals(level);
     bool running = verbosity > 0;
     if (!running) return;
@@ -264,19 +264,26 @@ void Monitor(const Timestamp& start_ts, int verbosity, const Level* level, const
         print(" states [{}]", states.monitor());
         print(" queue [{}]", queue.monitor());
         print("\n");
-        if (verbosity >= 2) {
-            auto ss = queue.top();
-            if (ss.has_value()) {
-                State s = ss.value();
+        if (verbosity < 2) continue;
 
-                int shard = StateMap<State>::shard(s);
-                states.lock(shard);
-                const StateInfo* q = states.query(s, shard);
-                states.unlock(shard);
-                print("distance {}, heuristic {}\n", q->distance, q->heuristic);
-                corrals.find_unsolved_picorral(s);
-                PrintWithCorral(level, s, corrals.opt_picorral());
+        while (true) {
+            auto ss = queue.top();
+            if (!ss.has_value()) break;
+            State s = ss.value();
+
+            if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) {
+                if (!queue.wait_while_running_for(10ms)) return;
+                continue;
             }
+
+            int shard = StateMap<State>::shard(s);
+            states.lock(shard);
+            const StateInfo* q = states.query(s, shard);
+            states.unlock(shard);
+            print("distance {}, heuristic {}\n", q->distance, q->heuristic);
+            corrals.find_unsolved_picorral(s);
+            PrintWithCorral(level, s, corrals.opt_picorral());
+            break;
         }
     }
 }
@@ -501,6 +508,7 @@ struct Solver {
                 auto p = queue_pop();
                 if (!p) return;
                 const State& s = p->first;
+                if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) continue;
                 const StateInfo& si = p->second;
 
                 // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
@@ -665,6 +673,7 @@ struct AltSolver {
             auto p = queue_pop();
             if (!p) return std::nullopt;
             const State& s = p->first;
+            if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) continue;
             const StateInfo& si = p->second;
 
             // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
