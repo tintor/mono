@@ -65,6 +65,16 @@ cc_library(
 )
 
 cc_binary(
+    name = "4x5",
+    srcs = ["4x5.cc"],
+    deps = [
+        ":level",
+        "//core:timestamp", "//core:fmt",
+        "@boost//:program_options"
+    ],
+)
+
+cc_binary(
     name = "main",
     srcs = ["main.cc"],
     deps = [

@@ -143,11 +143,12 @@ bool LevelEnv::IsValid() const {
     return true;
 }
 
-string_view Emoji(bool wall, bool box, bool goal, bool agent) {
+string_view Emoji(bool wall, bool box, bool goal, bool agent, bool sink) {
     if (wall) return "✴️ ";
     if (agent) return goal ? "😎" : "😀";
     if (box) return goal ? "🔵" : "🔴";
     if (goal) return "🏳 ";
+    if (sink) return "🏴";
     return "  ";
 }
 
@@ -155,7 +156,7 @@ void LevelEnv::Print() const {
     for (int r = 0; r < wall.rows(); r++) {
         for (int c = 0; c < wall.cols(); c++) {
             int2 i{c, r};
-            std::cout << Emoji(wall(i), box(i), goal(i), equal(agent, i));
+            std::cout << Emoji(wall(i), box(i), goal(i), equal(agent, i), sink(i));
         }
         std::cout << std::endl;
     }
