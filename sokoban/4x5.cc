@@ -81,6 +81,23 @@ struct Boxes32 {
     T data = 0;
 };
 
+ulong Encode(const LevelEnv& e) {
+    ulong a = 0;
+    ulong p = 1;
+
+    const int cols = e.wall.cols() - 4;
+    const int rows = e.wall.rows() - 4;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            int2 m = {c + 2, r + 2};
+            if (e.box(m)) a += p;
+            if (e.wall(m)) a += 2 * p;
+            p *= 3;
+        }
+    }
+    return a;
+}
+
 ulong Encode(const LevelEnv& e, int transform) {
     ulong a = 0;
     ulong p = 1;
@@ -210,11 +227,15 @@ bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
                 const Cell* c = b->dir(d);
                 if (c == nullptr) THROW(runtime_error, "wtf");
                 ns.boxes.reset(b->id);
-                if (!c->sink) ns.boxes.set(c->id);
 
-                if (c->sink && ns.boxes == State::Boxes()) throw Solved();
+                if (c->sink) {
+                    if (ns.boxes == State::Boxes()) throw Solved();
+                } else {
+                    ns.boxes.set(c->id);
+                    if (is_simple_deadlock(c, ns.boxes)) return;
+                }
+
                 normalize(level, ns);
-
                 if (visited.contains(ns)) return;
                 visited.insert(ns);
                 remaining.push_back(ns);
@@ -226,9 +247,16 @@ bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
     }
 
     unsolveable.insert(canonical_icode);
-    //for (const State& s : visited) {
-        // TODO encode state and insert into unsolveable
-    //}
+    LevelEnv o = env;
+    for (const State& s : visited) {
+        if (s.agent != start.agent) continue;
+
+        for (int i = 0; i < level->num_alive; i++) {
+            int2 m = level->cell_to_vec(level->cells[i]);
+            o.box(m) = s.boxes[i];
+        }
+        unsolveable.insert(Encode(o, 0));
+    }
     return false;
 }
 
@@ -390,7 +418,8 @@ void FindAll(int rows, int cols) {
 
             double elapsed = start_ts.elapsed_s();
             double eta = (1 - progress) * elapsed / progress;
-            print(", ETA {} hours\n", eta / 3600);
+            long eta_hours = eta / 3600;
+            print(", ETA {}:{}\n", eta_hours, (eta - eta_hours * 3600) / 60);
         }
     });
 
@@ -422,8 +451,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
-    //FindAll(3, 5);
-    //FindAll(4, 4);
+    FindAll(3, 5);
+    FindAll(4, 4); // 49s (including all above)
     //FindAll(4, 5);
     return 0;
 }
