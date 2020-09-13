@@ -18,6 +18,7 @@ constexpr char Wall = '#';
 constexpr char Goal = '.';
 constexpr char Space = ' ';
 constexpr char Dead = ':';
+constexpr char Sink = 'x';
 };
 
 // TODO Replace Minimal with LevelEnv
@@ -47,6 +48,7 @@ struct Minimal {
                 if (env.box(i)) box[xy] = true;
                 if (env.goal(i)) cell[xy] = Code::Goal;
                 if (env.wall(i)) cell[xy] = Code::Wall;
+                if (env.sink(i)) cell[xy] = Code::Sink;
             }
         }
         agent = env.agent.x + env.agent.y * w;
@@ -94,9 +96,13 @@ struct Minimal {
         check(xy);
         return cell[xy] == Code::Goal;
     }
+    bool sink(int xy) const {
+        check(xy);
+        return cell[xy] == Code::Sink;
+    }
     bool alive(int xy) const {
         check(xy);
-        return empty(xy) || goal(xy);
+        return empty(xy) || goal(xy) || sink(xy);
     }
 
     void move_agent_from_deadend() {
@@ -169,7 +175,7 @@ struct Minimal {
 
         vector<char> live(cell.size(), false);
         for (int i = 0; i < cell.size(); i++) {
-            if (!goal(i)) continue;
+            if (!goal(i) && !sink(i)) continue;
             for (int m : dirs) if (open(i + m)) add(i + m, i);
             live[i] = true;
         }
@@ -220,7 +226,7 @@ struct Minimal {
             Cell* c = new Cell;
             c->xy = a;
             c->goal = goal(a);
-            c->sink = false;
+            c->sink = sink(a);
             c->alive = alive(a);
             c->level = level;
             reverse[a] = c;
@@ -392,12 +398,14 @@ const Level* LoadLevel(string_view filename) {
     return LoadLevel(env);
 }
 
-const Level* LoadLevel(const LevelEnv& env) {
+const Level* LoadLevel(const LevelEnv& env, bool extra) {
     Minimal m;
     m.init(env);
-    m.move_agent_from_deadend();
-    m.remove_deadends();
-    m.cleanup_walls();
+    if (extra) {
+        m.move_agent_from_deadend();
+        m.remove_deadends();
+        m.cleanup_walls();
+    }
     int num_dead = m.find_dead_cells();
 
     // TODO destroy on exception
@@ -411,7 +419,6 @@ const Level* LoadLevel(const LevelEnv& env) {
     level->num_boxes = m.num_boxes();
     if (level->num_boxes == 0) THROW(invalid_argument, "no boxes");
     level->num_goals = m.num_goals();
-    if (level->num_boxes != level->num_goals) THROW(invalid_argument, "count(box) != count(goal)");
 
     if (m.box[m.agent]) THROW(runtime_error, "agent on box2");
     level->num_alive = m.cell_count - num_dead;
@@ -423,8 +430,10 @@ const Level* LoadLevel(const LevelEnv& env) {
     if (level->start.agent < level->num_alive && level->start.boxes[level->start.agent])
         THROW(runtime_error, "agent(%s) on box", level->start.agent);
 
-    ComputePushDistances(level);
-    ComputeGoalPenalties(level);
+    if (extra) {
+        ComputePushDistances(level);
+        ComputeGoalPenalties(level);
+    }
 
     /*string label;
     Print(level, level->start, [&label](auto e) {

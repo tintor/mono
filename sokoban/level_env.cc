@@ -106,6 +106,15 @@ void LevelEnv::Load(string_view filename) {
 
 bool equal(int2 a, int2 b) { return a.x == b.x && a.y == b.y; }
 
+bool LevelEnv::ContainsSink() const {
+    for (int r = 0; r < sink.rows(); r++) {
+        for (int c = 0; c < sink.cols(); c++) {
+            if (sink(r, c)) return true;
+        }
+    }
+    return false;
+}
+
 bool LevelEnv::IsValid() const {
     // All matrices must be the same size and at least 3.
     int2 shape = wall.shape();
@@ -113,7 +122,7 @@ bool LevelEnv::IsValid() const {
         print("Level too small.\n");
         return false;
     }
-    if (!equal(box.shape(), shape) || !equal(goal.shape(), shape)) return false;
+    if (!equal(box.shape(), shape) || !equal(goal.shape(), shape) || !equal(sink.shape(), shape)) return false;
 
     // Agent must be in a non-wall and non-box cell.
     if (agent.x < 0 || agent.x >= shape.x || agent.y >= shape.y || agent.y < 0) {
@@ -133,13 +142,15 @@ bool LevelEnv::IsValid() const {
         }
     }
 
-    // There must be at least one goal for each box.
-    int count = 0;
-    for (int r = 0; r < shape.y; r++) for (int c = 0; c < shape.x; c++) {
-        if (box(r, c)) count -= 1;
-        if (goal(r, c)) count += 1;
+    if (!ContainsSink()) {
+        // There must be at least one goal for each box.
+        int count = 0;
+        for (int r = 0; r < shape.y; r++) for (int c = 0; c < shape.x; c++) {
+            if (box(r, c)) count -= 1;
+            if (goal(r, c)) count += 1;
+        }
+        if (count < 0) { print("More boxes than goals.\n"); return false; }
     }
-    if (count < 0) { print("More boxes than goals.\n"); return false; }
     return true;
 }
 

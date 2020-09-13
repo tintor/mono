@@ -109,6 +109,7 @@ std::string_view Emoji(const Level* level, Agent agent, const Boxes& boxes, uint
         return "🔴";
     }
     if (c->goal) return "🏳 ";
+    if (c->sink) return "🏴";
     return "🕸️ ";
 }
 
@@ -122,7 +123,7 @@ void Print(const Level* level, const State& key, std::function<std::string_view(
 }
 
 struct LevelEnv;
-const Level* LoadLevel(const LevelEnv& level_env);
+const Level* LoadLevel(const LevelEnv& level_env, bool extra = true);
 const Level* LoadLevel(std::string_view filename);
 
 uint CellCount(std::string_view filename);

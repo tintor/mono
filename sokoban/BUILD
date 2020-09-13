@@ -70,7 +70,7 @@ cc_binary(
     deps = [
         ":level",
         "//core:timestamp", "//core:fmt",
-        "@boost//:program_options"
+        "@absl//absl/container:flat_hash_set",
     ],
 )
 

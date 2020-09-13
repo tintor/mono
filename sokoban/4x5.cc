@@ -1,8 +1,11 @@
 #include "sokoban/level_env.h"
 #include "sokoban/level.h"
+#include "sokoban/util.h"
 #include "core/fmt.h"
+#include "absl/container/flat_hash_set.h"
 
 using std::vector;
+using absl::flat_hash_set;
 
 LevelEnv MakeEnv(int rows, int cols) {
     LevelEnv env;
@@ -46,9 +49,45 @@ void Apply(const vector<char>& code, LevelEnv* env) {
     }
 }
 
+// TODO DenseBoxes based on single ulong!
+using State = TState<DenseBoxes<1>>;
+
+struct Solved {};
+
 bool IsSolveable(const LevelEnv& env) {
-    // TODO
-    return true;
+    const Level* level = LoadLevel(env, /*extra*/false);
+    State start = level->start;
+    normalize(level, start);
+
+    absl::flat_hash_set<State> visited;
+    vector<State> remaining;
+    visited.insert(start);
+    remaining.push_back(start);
+
+    try {
+        while (!remaining.empty()) {
+            const State s = remaining.back();
+            remaining.pop_back();
+
+            for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
+                State ns = s;
+                const Cell* c = b->dir(d);
+                if (c == nullptr) THROW(runtime_error, "wtf");
+                ns.boxes.reset(b->id);
+                if (!c->sink) ns.boxes.set(c->id);
+
+                if (c->sink && ns.boxes == State::Boxes()) throw Solved();
+                normalize(level, ns);
+
+                if (visited.contains(ns)) return;
+                visited.insert(ns);
+                remaining.push_back(ns);
+            });
+        }
+        return false;
+    } catch (Solved) {
+        return true;
+    }
 }
 
 // empty or one box
@@ -140,17 +179,17 @@ void FindAll(int rows, int cols) {
         if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
         if (HasFreeCornerBox(env)) continue;
         if (Has2x2Deadlock(env)) continue;
+        if (IsSolveable(env)) continue;
 
         count += 1;
-        if (count % 10000 == 0) {
-            env.Print(false);
-            print("{}\n", double(icode) / icode_max);
-        }
+        env.Print(false);
+        print("progress {}\n\n", double(icode) / icode_max);
     }
     print("{} x {} -> {}\n", rows, cols, count);
 }
 
 int main(int argc, char* argv[]) {
+    FindAll(2, 3);
     FindAll(2, 4);
     FindAll(3, 3);
     FindAll(2, 5);

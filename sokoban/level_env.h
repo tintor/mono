@@ -23,6 +23,7 @@ struct LevelEnv {
     bool Move(int2 delta) { return Action(delta, true, false); }
 
     bool IsSolved() const;
+    bool ContainsSink() const;
 };
 
 int NumberOfLevels(std::string_view filename);
