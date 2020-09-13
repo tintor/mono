@@ -297,7 +297,7 @@ private:
 
                 boxes.reset(i);
                 auto p = contains_frozen_boxes_const(_level->cells[agent], boxes, num_boxes);
-                // Note: PushBlockedGoal case here is needed for 001.txt:156
+                // Note: PushBlockedGoal case here is needed for dm1:156
                 if (p.first == Result::NotFrozen || p.first == Result::PushBlockedGoal) {
                     boxes.set(i);
                     continue;
