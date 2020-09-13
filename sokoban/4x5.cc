@@ -1,6 +1,7 @@
 #include "sokoban/level_env.h"
 #include "sokoban/level.h"
 #include "sokoban/util.h"
+#include "core/timestamp.h"
 #include "core/fmt.h"
 #include "absl/container/flat_hash_set.h"
 #include <thread>
@@ -289,8 +290,11 @@ bool IsMinimal(const LevelEnv& e, ulong icode, Cache* cache, int num_boxes) {
                 o.box(r + 2, c + 2) = true;
             }
             if (Wall(e, r, c)) {
-                o.wall(r + 2, c + 2) = false;
+                o.wall(r + 2, c + 2) = false; // remove wall
                 if (!IsSolveable(o, icode - p * 2, cache)) return false;
+                o.box(r + 2, c + 2) = true; // wall -> box
+                if (!IsSolveable(o, icode - p, cache)) return false;
+                o.box(r + 2, c + 2) = false;
                 o.wall(r + 2, c + 2) = true;
             }
             p *= 3;
@@ -309,11 +313,18 @@ void FindAll(int rows, int cols) {
     ulong icode = 0;
     int num_boxes = 0;
 
+    Timestamp start_ts;
     std::atomic<bool> running = true;
     std::thread monitor([&]() {
         while (running) {
-            std::this_thread::sleep_for(5s);
-            print("progress {}, solvable {}, unsolveable {}, patterns {}\n", double(icode) / icode_max, cache.solveable.size(), cache.unsolveable.size(), count);
+            for (int i = 0; i < 10; i++) {
+                std::this_thread::sleep_for(500ms);
+                if (!running) return;
+            }
+            double elapsed = start_ts.elapsed_s();
+            double progress = double(icode) / icode_max;
+            double eta = (1 - progress) * elapsed / progress;
+            print("progress {}, solvable {}, unsolveable {}, patterns {}, ETA {} hours\n", progress, cache.solveable.size(), cache.unsolveable.size(), count, eta / 3600);
         }
     });
 
@@ -344,8 +355,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
-    //FindAll(3, 5);
-    //FindAll(4, 4);
-    //FindAll(4, 5);
+    FindAll(3, 5);
+    FindAll(4, 4);
+    FindAll(4, 5);
     return 0;
 }
