@@ -6,6 +6,7 @@
 #include <thread>
 #include <vector>
 #include <optional>
+#include <functional>
 
 inline void parallel(size_t max_threads, const std::function<void()>& func) {
     std::vector<std::thread> workers;

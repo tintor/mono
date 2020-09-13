@@ -1,6 +1,7 @@
 #pragma once
 #include "core/span.h"
 
+#include <memory>
 #include <algorithm>
 
 template<typename T>
