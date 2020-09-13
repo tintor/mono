@@ -127,11 +127,14 @@ bool Has2x2Deadlock(const LevelEnv& e) {
 
 void FindAll(int rows, int cols) {
     LevelEnv env = MakeEnv(rows, cols);
+    ulong icode_max = std::pow(3, rows * cols) - 1;
 
     int count = 0;
     vector<char> code(rows * cols, 0);
+    ulong icode = 0;
     int num_boxes = 0;
     while (Increment(code, &num_boxes)) {
+        icode += 1;
         if (num_boxes == 0) continue;
         Apply(code, &env);
         if (HasEmptyRowX(env) || HasEmptyColX(env)) continue;
@@ -139,9 +142,9 @@ void FindAll(int rows, int cols) {
         if (Has2x2Deadlock(env)) continue;
 
         count += 1;
-        if (count % 1000 == 0) {
+        if (count % 10000 == 0) {
             env.Print(false);
-            print("\n");
+            print("{}\n", double(icode) / icode_max);
         }
     }
     print("{} x {} -> {}\n", rows, cols, count);
