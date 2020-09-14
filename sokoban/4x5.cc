@@ -412,7 +412,88 @@ void PrintToFile(std::ofstream& os, const LevelEnv& env) {
     os.flush();
 }
 
+struct Pattern {
+    int rows, cols, num_boxes, num_walls;
+    vector<char> cells;
+
+    bool MatchesAt(const LevelEnv& env, int dr, int dc) const;
+    bool Matches(const LevelEnv& env) const;
+};
+
+char Cell(const LevelEnv& env, int r, int c) {
+    if (env.wall(r + 2, c + 2)) return '#';
+    if (env.box(r + 2, c + 2)) return '$';
+    return ' ';
+}
+
+bool Pattern::MatchesAt(const LevelEnv& env, const int dr, const int dc) const {
+    int boxes = 0;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            const char a = cells[r * cols + c];
+            const char b = Cell(env, dr + r, dc + c);
+            if (b == '$') boxes += 1;
+            if (a == b || a == ' ') continue;
+            if (a == '#' && b != '#') return false;
+            if (a == '$' && b == '#') continue;
+            if (a == '$' && b == ' ') return false;
+        }
+    }
+    return boxes > 0;
+}
+
+bool Pattern::Matches(const LevelEnv& env) const {
+    const int er = env.wall.rows() - 4;
+    const int ec = env.wall.cols() - 4;
+
+    const int mr = er - rows + 1;
+    const int mc = ec - cols + 1;
+    for (int r = 0; r < mr; r++) {
+        for (int c = 0; c < mc; c++) {
+            if (MatchesAt(env, r, c)) return true;
+        }
+    }
+    return false;
+}
+
+class Patterns {
+public:
+    bool Matches(const LevelEnv& env) const;
+    void Add(const Pattern& pattern);
+    void LoadFromDisk();
+private:
+    vector<Pattern> _data;
+};
+
+bool Patterns::Matches(const LevelEnv& env) const {
+    for (const Pattern& p : _data) {
+        if (p.Matches(env)) return true;
+    }
+    return false;
+}
+
+void Patterns::LoadFromDisk() {
+    for (const auto& entry : std::filesystem::directory_iterator(kPatternsPath)) {
+        std::ifstream is(entry.path());
+        // for each pattern in file
+        // Add(pattern)
+    }
+}
+
+void Patterns::Add(const Pattern& pattern) {
+    for (int transform = 0; transform < 8; transform++) {
+        if (transform >= 4 && pattern.rows != pattern.cols) break;
+
+        Pattern p = pattern;
+        // TODO transform!
+        _data.push_back(p);
+    }
+}
+
 void FindAll(int rows, int cols) {
+    Patterns patterns;
+    patterns.LoadFromDisk();
+
     std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
 
     LevelEnv env = MakeEnv(rows, cols);
@@ -456,6 +537,7 @@ void FindAll(int rows, int cols) {
         if (Has2x2Deadlock(env)) continue;
         if (HasFreeBox(env)) continue;
         if (!IsCanonical(env, icode)) continue;
+        if (patterns.Matches(env)) continue;
         if (solver.IsSolveable(env, icode)) continue;
         if (!IsMinimal(env, icode, &solver, num_boxes)) continue;
 
@@ -469,6 +551,12 @@ void FindAll(int rows, int cols) {
     print("{} x {} -> {}\n", rows, cols, count);
 }
 
+// TODO:
+// - Parallelize!
+// - Change LevelEnv to vector<char> and solve it directly, to avoid building Level structure.
+// - Match smaller patters!
+// - Match previously found patterns of same size!
+
 int main(int argc, char* argv[]) {
     std::filesystem::create_directories(kPatternsPath);
     /*FindAll(2, 3);
@@ -478,6 +566,7 @@ int main(int argc, char* argv[]) {
     FindAll(3, 4);
     FindAll(3, 5);
     FindAll(4, 4); // 49s (including all above)*/
-    FindAll(4, 5);
+    //FindAll(4, 5);
+    FindAll(3, 6);
     return 0;
 }
