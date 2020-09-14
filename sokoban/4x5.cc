@@ -216,6 +216,7 @@ bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
     if (unsolveable.contains(canonical_icode)) return false;
 
     const Level* level = LoadLevel(env, /*extra*/false);
+    ON_SCOPE_EXIT(Destroy(level));
     if (level->num_alive > 32) THROW(runtime_error, "num_alive > 32");
     State start = level->start;
     normalize(level, start);
@@ -567,6 +568,7 @@ int main(int argc, char* argv[]) {
     FindAll(3, 5);
     FindAll(4, 4); // 49s (including all above)*/
     //FindAll(4, 5);
-    FindAll(3, 6);
+    //FindAll(3, 6);
+    FindAll(3, 7);
     return 0;
 }

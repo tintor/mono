@@ -125,6 +125,7 @@ void Print(const Level* level, const State& key, std::function<std::string_view(
 struct LevelEnv;
 const Level* LoadLevel(const LevelEnv& level_env, bool extra = true);
 const Level* LoadLevel(std::string_view filename);
+void Destroy(const Level*);
 
 uint CellCount(std::string_view filename);
 void PrintInfo(const Level* level);

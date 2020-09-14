@@ -444,6 +444,12 @@ const Level* LoadLevel(const LevelEnv& env, bool extra) {
     return level;
 }
 
+void Destroy(const Level* clevel) {
+    Level* level = const_cast<Level*>(clevel);
+    for (Cell* c : level->cells) delete c;
+    delete level;
+}
+
 inline double Choose(uint a, uint b) {
     double s = 1;
     for (uint i = a; i > a - b; i--) s *= i;
