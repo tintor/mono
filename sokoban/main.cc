@@ -1,4 +1,5 @@
 #include "sokoban/solver.h"
+#include "sokoban/festival_solver.h"
 #include "sokoban/level_env.h"
 
 #include "core/fmt.h"
@@ -43,6 +44,7 @@ struct Options : public SolverOptions {
     bool unsolved = false;
     bool animate = false;
     bool must_solve = true;
+    bool fest = false;
 };
 
 string Solve(string_view file, const Options& options) {
@@ -80,7 +82,7 @@ string Solve(string_view file, const Options& options) {
         print("Level {}\n", name);
         LevelEnv env;
         env.Load(format("{}{}", kPrefix, name));
-        const auto solution = Solve(env, options);
+        const auto solution = options.fest ? FestivalSolve(env, options) : Solve(env, options);
         if (!solution.first.empty()) {
             completed += 1;
             print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
@@ -123,6 +125,7 @@ int main(int argc, char** argv) {
     Options options;
     po::options_description desc("Allowed options");
     desc.add_options()
+        ("fest", po::bool_switch(&options.fest), "")
         ("max_time", po::value<int>(&options.max_time), "")
         ("debug", po::bool_switch(&options.debug), "")
         ("alt", po::bool_switch(&options.alt), "")

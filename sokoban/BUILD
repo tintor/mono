@@ -64,6 +64,17 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "festival_solver",
+    hdrs = ["festival_solver.h"],
+    srcs = ["festival_solver.cc"],
+    deps = [
+        ":solver", ":corrals", ":level", ":level_env", ":state", ":deadlock",
+        "//core:timestamp",
+        "@absl//absl/container:flat_hash_map",
+    ],
+)
+
 cc_binary(
     name = "4x5",
     srcs = ["4x5.cc"],
@@ -78,7 +89,7 @@ cc_binary(
     name = "main",
     srcs = ["main.cc"],
     deps = [
-        ":solver",
+        ":solver", ":festival_solver",
         "//core:vector", "//core:auto", "//core:bits", "//core:range", "//core:string", "//core:thread", "//core:timestamp", "//core:fmt",
         "@boost//:program_options"
     ],

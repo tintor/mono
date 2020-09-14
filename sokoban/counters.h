@@ -2,7 +2,7 @@
 #include "core/fmt.h"
 #include "core/timestamp.h"
 
-double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
+inline double Sec(ulong ticks) { return Timestamp::to_s(ticks); }
 
 struct Counters {
     typedef ulong T;

@@ -826,6 +826,7 @@ void ExtractPush(const Level* level, LevelEnv& env, const DynamicState& state0, 
 // Returns steps as deltas and number of pushes.
 pair<vector<int2>, int> Solve(LevelEnv env, const SolverOptions& options) {
     auto level = LoadLevel(env);
+    ON_SCOPE_EXIT(Destroy(level));
     auto pushes = Solve(level, options);
     if (pushes.empty()) return {};
 
