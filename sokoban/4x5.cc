@@ -1,10 +1,18 @@
 #include "sokoban/level_env.h"
 #include "sokoban/level.h"
 #include "sokoban/util.h"
+
 #include "core/timestamp.h"
 #include "core/fmt.h"
+
 #include "absl/container/flat_hash_set.h"
+
 #include <thread>
+#include <filesystem>
+#include <string_view>
+#include <fstream>
+
+constexpr std::string_view kPatternsPath = "/tmp/sokoban/patterns";
 
 using namespace std::chrono_literals;
 using std::vector;
@@ -391,7 +399,22 @@ bool IsMinimal(const LevelEnv& e, ulong icode, Solver* solver, int num_boxes) {
     return true;
 }
 
+void PrintToFile(std::ofstream& os, const LevelEnv& env) {
+    for (int r = 2; r < env.wall.rows() - 2; r++) {
+        for (int c = 2; c < env.wall.cols() - 2; c++) {
+            if (env.wall(r, c)) os.put('#');
+            else if (env.box(r, c)) os.put('$');
+            else os.put('.');
+        }
+        os.put('\n');
+    }
+    os.put('\n');
+    os.flush();
+}
+
 void FindAll(int rows, int cols) {
+    std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
+
     LevelEnv env = MakeEnv(rows, cols);
     ulong icode_max = std::pow(3, rows * cols) - 1;
 
@@ -402,7 +425,7 @@ void FindAll(int rows, int cols) {
     int num_boxes = 0;
 
     Timestamp start_ts;
-    std::atomic<bool> running = false;
+    std::atomic<bool> running = true;
     std::thread monitor([&]() {
         while (running) {
             for (int i = 0; i < 10; i++) {
@@ -437,6 +460,7 @@ void FindAll(int rows, int cols) {
         if (!IsMinimal(env, icode, &solver, num_boxes)) continue;
 
         count += 1;
+        PrintToFile(of, env);
         env.Print(false);
         print("\n");
     }
@@ -446,13 +470,14 @@ void FindAll(int rows, int cols) {
 }
 
 int main(int argc, char* argv[]) {
-    FindAll(2, 3);
+    std::filesystem::create_directories(kPatternsPath);
+    /*FindAll(2, 3);
     FindAll(2, 4);
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
     FindAll(3, 5);
-    FindAll(4, 4); // 49s (including all above)
-    //FindAll(4, 5);
+    FindAll(4, 4); // 49s (including all above)*/
+    FindAll(4, 5);
     return 0;
 }
