@@ -4,6 +4,7 @@
 
 #include "core/timestamp.h"
 #include "core/fmt.h"
+#include "core/file.h"
 
 #include "absl/container/flat_hash_set.h"
 
@@ -12,11 +13,13 @@
 #include <string_view>
 #include <fstream>
 
-constexpr std::string_view kPatternsPath = "/tmp/sokoban/patterns";
-
 using namespace std::chrono_literals;
+using std::string_view;
+using std::string;
 using std::vector;
 using absl::flat_hash_set;
+
+constexpr string_view kPatternsPath = "/tmp/sokoban/patterns";
 
 LevelEnv MakeEnv(int rows, int cols) {
     LevelEnv env;
@@ -414,12 +417,33 @@ void PrintToFile(std::ofstream& os, const LevelEnv& env) {
 }
 
 struct Pattern {
-    int rows, cols, num_boxes, num_walls;
+    int rows, cols;
     vector<char> cells;
 
+    Pattern() {}
+    Pattern(const vector<string> lines);
     bool MatchesAt(const LevelEnv& env, int dr, int dc) const;
     bool Matches(const LevelEnv& env) const;
 };
+
+Pattern::Pattern(const vector<string> lines) {
+    if (lines.size() == 0) THROW(runtime_error, "empty lines");
+    rows = lines.size();
+    cols = lines[0].size();
+    for (const auto& line : lines) {
+        if (line.size() != cols) THROW(runtime_error, "uneven lines");
+    }
+
+    cells.resize(rows * cols);
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            char m = lines[r][c];
+            if (m != '.' && m != '$' && m != '#') THROW(runtime_error, "unexpected char: {}", m);
+            if (m == '.') m = ' ';
+            cells[r * cols + c] = m;
+        }
+    }
+}
 
 char Cell(const LevelEnv& env, int r, int c) {
     if (env.wall(r + 2, c + 2)) return '#';
@@ -473,11 +497,28 @@ bool Patterns::Matches(const LevelEnv& env) const {
     return false;
 }
 
+vector<Pattern> LoadPatternsFromFile(string_view path) {
+    vector<Pattern> patterns;
+    vector<string> lines;
+
+    string line;
+    std::ifstream in(path);
+    while (std::getline(in, line)) {
+        if (line.empty() && !lines.empty()) {
+            patterns.push_back(Pattern(lines));
+            lines.clear();
+        } else {
+            lines.push_back(line);
+        }
+    }
+    return patterns;
+}
+
 void Patterns::LoadFromDisk() {
     for (const auto& entry : std::filesystem::directory_iterator(kPatternsPath)) {
-        std::ifstream is(entry.path());
-        // for each pattern in file
-        // Add(pattern)
+        for (const Pattern& p : LoadPatternsFromFile(entry.path().string())) {
+            Add(p);
+        }
     }
 }
 
@@ -486,24 +527,59 @@ void Patterns::Add(const Pattern& pattern) {
         if (transform >= 4 && pattern.rows != pattern.cols) break;
 
         Pattern p = pattern;
-        // TODO transform!
+        // TODO transform p!
         _data.push_back(p);
     }
 }
 
-void FindAll(int rows, int cols) {
+void LoadPatternIntoEnv(LevelEnv& env, const Pattern& p) {
+    const int rows = env.wall.rows() - 4;
+    const int cols = env.wall.cols() - 4;
+    if (p.rows != rows || p.cols != cols) THROW(runtime_error, "pattern size mismatch with env");
+
+    // Load pattern into env
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            const char m = p.cells[r * cols + c];
+            env.wall(r + 2, c + 2) = m == '#';
+            env.box(r + 2, c + 2) = m == '$';
+            if (m != ' ' && m != '$' && m != '#') THROW(runtime_error, "unexpected char {}", m);
+        }
+    }
+}
+
+void FindAll(int rows, int cols, bool resume = false) {
     Patterns patterns;
     patterns.LoadFromDisk();
 
-    std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
-
     LevelEnv env = MakeEnv(rows, cols);
+
+    ulong icode_min = 0;
+    vector<char> code(rows * cols, 0);
+
+    if (resume) {
+        const auto path = format("{}/{}x{}.partial", kPatternsPath, rows, cols);
+        const Pattern p = LoadPatternsFromFile(path).back();
+        LoadPatternIntoEnv(env, p);
+        icode_min = Encode(env);
+        // load pattern into code
+        for (int i = 0; i < p.cells.size(); i++) {
+            if (p.cells[i] == ' ') code[i] = 0;
+            if (p.cells[i] == '$') code[i] = 1;
+            if (p.cells[i] == '#') code[i] = 2;
+        }
+
+        print("starting pattern\n");
+        env.Print(false);
+        print("\n");
+    }
+
+    std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
     ulong icode_max = std::pow(3, rows * cols) - 1;
 
     Solver solver;
     int count = 0;
-    vector<char> code(rows * cols, 0);
-    ulong icode = 0;
+    ulong icode = icode_min;
     int num_boxes = 0;
 
     Timestamp start_ts;
@@ -515,8 +591,9 @@ void FindAll(int rows, int cols) {
                 if (!running) return;
             }
 
-            double progress = double(icode) / icode_max;
+            double progress = double(icode - icode_min) / (icode_max - icode_min);
             print("progress {}", progress);
+            print(", icode {}", icode);
             print(", solvable {}", solver.solveable.size());
             print(", unsolveable {}", solver.unsolveable.size());
             print(", patterns {}", count);
@@ -538,7 +615,7 @@ void FindAll(int rows, int cols) {
         if (Has2x2Deadlock(env)) continue;
         if (HasFreeBox(env)) continue;
         if (!IsCanonical(env, icode)) continue;
-        if (patterns.Matches(env)) continue;
+        // if (patterns.Matches(env)) continue;
         if (solver.IsSolveable(env, icode)) continue;
         if (!IsMinimal(env, icode, &solver, num_boxes)) continue;
 
@@ -567,8 +644,8 @@ int main(int argc, char* argv[]) {
     FindAll(3, 4);
     FindAll(3, 5);
     FindAll(4, 4); // 49s (including all above)*/
-    //FindAll(4, 5);
+    //FindAll(4, 5, true);
     //FindAll(3, 6);
-    FindAll(3, 7);
+    FindAll(3, 7, true);
     return 0;
 }
