@@ -1,6 +1,5 @@
 #include "sokoban/level_env.h"
 #include "sokoban/level.h"
-#include "sokoban/util.h"
 
 #include "core/timestamp.h"
 #include "core/fmt.h"
@@ -66,7 +65,7 @@ void Apply(const vector<char>& code, LevelEnv* env) {
     }
 }
 
-struct Boxes32 {
+struct Boxes {
     using T = ulong;
 
     bool operator[](uint index) const { return index < 32 && (data | mask(index)) == data; }
@@ -85,9 +84,9 @@ struct Boxes32 {
 
     size_t hash() const { return data; }
 
-    bool operator==(const Boxes32 o) const { return data == o.data; }
+    bool operator==(const Boxes o) const { return data == o.data; }
 
-    bool contains(const Boxes32 o) const { return (data | o.data) == data; }
+    bool contains(const Boxes o) const { return (data | o.data) == data; }
 
    private:
     static T mask(uint index) { return T(1) << index; }
@@ -202,7 +201,7 @@ bool HasFreeBox(const LevelEnv& e) {
     return false;
 }
 
-using State = TState<Boxes32>;
+using State = TState<Boxes>;
 
 struct Solved {};
 
@@ -215,6 +214,67 @@ struct Solver {
     flat_hash_set<ulong> solveable;
     flat_hash_set<ulong> unsolveable;
 };
+
+void normalize(const Level* level, State& s) {
+    AgentVisitor visitor(level, s.agent);
+    for (const Cell* a : visitor) {
+        if (a->id < s.agent) s.agent = a->id;
+        for (auto [_, b] : a->moves)
+            if (!s.boxes[b->id]) visitor.add(b);
+    }
+}
+
+template <typename Push>
+void for_each_push(const Level* level, const State& s, const Push& push) {
+    AgentVisitor visitor(level);
+    visitor.add(s.agent);
+    for (const Cell* a : visitor) {
+        for (auto [d, b] : a->actions) {
+            if (!s.boxes[b->id]) {
+                visitor.add(b);
+                continue;
+            }
+            const Cell* c = b->dir(d);
+            if (c && (c->alive || c->sink) && !s.boxes[c->id]) push(a, b, d);
+        }
+    }
+}
+
+bool is_free(const Cell* a, const Boxes& boxes) {
+    return a && !boxes[a->id];
+}
+
+bool is_2x2_deadlock(const Cell* box, const Boxes& boxes) {
+    for (int d = 0; d < 4; d++) {
+        const Cell* a = box->dir(d);
+        if (is_free(a, boxes)) continue;
+        const Cell* b = box->dir(d + 1);
+        if (is_free(b, boxes)) continue;
+        if (!a && !b) return !box->goal;
+        if (a) {
+            const Cell* c = a->dir(d + 1);
+            if (!is_free(c, boxes)) return !(box->goal && a->goal && (!b || b->goal) && (!c || c->goal));
+        }
+        if (b) {
+            const Cell* c = b->dir(d);
+            if (!is_free(c, boxes)) return !(box->goal && b->goal && (!a || a->goal) && (!c || c->goal));
+        }
+    }
+    return false;
+}
+
+bool is_2x3_deadlock(const Cell* box, const Boxes& boxes) {
+    const Cell* a = box;
+    for (int d = 0; d < 4; d++) {
+        const Cell* b = a->dir(d);
+        if (!b || !boxes[b->id]) continue;
+        if (a->goal && b->goal) continue;
+        // Both A and B are boxes, and one of them is not on goal
+        if (!a->dir(d - 1) && !b->dir(d + 1)) return true;
+        if (!a->dir(d + 1) && !b->dir(d - 1)) return true;
+    }
+    return false;
+}
 
 bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
     ulong canonical_icode = Canonical(env);
@@ -244,10 +304,10 @@ bool Solver::IsSolveable(const LevelEnv& env, ulong icode) {
                 ns.boxes.reset(b->id);
 
                 if (c->sink) {
-                    if (ns.boxes == State::Boxes()) throw Solved();
+                    if (ns.boxes == Boxes()) throw Solved();
                 } else {
                     ns.boxes.set(c->id);
-                    if (is_simple_deadlock(c, ns.boxes)) return;
+                    if (is_2x2_deadlock(c, ns.boxes) || is_2x3_deadlock(c, ns.boxes)) return;
                 }
 
                 normalize(level, ns);
