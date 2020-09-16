@@ -40,13 +40,16 @@ LevelEnv MakeEnv(int rows, int cols) {
     return env;
 }
 
+constexpr char BoxCode = 1;
+constexpr char WallCode = 2;
+
 bool Increment(vector<char>& code, int* num_boxes) {
     size_t i = 0;
     while (i < code.size()) {
         char& c = code[i];
-        if (c == 1) *num_boxes -= 1;
+        if (c == BoxCode) *num_boxes -= 1;
         c += 1;
-        if (c == 1) *num_boxes += 1;
+        if (c == BoxCode) *num_boxes += 1;
         if (c < 3) return true;
         c = 0;
         i += 1;
@@ -58,8 +61,8 @@ void Apply(const vector<char>& code, LevelEnv* env) {
     const int cols = env->wall.cols() - 4;
     for (int i = 0; i < code.size(); i++) {
         int2 m = {i % cols + 2, i / cols + 2};
-        env->box(m) = code[i] == 1;
-        env->wall(m) = code[i] == 2;
+        env->box(m) = code[i] == BoxCode;
+        env->wall(m) = code[i] == WallCode;
     }
 }
 
@@ -548,31 +551,13 @@ void LoadPatternIntoEnv(LevelEnv& env, const Pattern& p) {
     }
 }
 
-void FindAll(int rows, int cols, bool resume = false) {
+void FindAll(int rows, int cols) {
     Patterns patterns;
     patterns.LoadFromDisk();
 
     LevelEnv env = MakeEnv(rows, cols);
-
     ulong icode_min = 0;
     vector<char> code(rows * cols, 0);
-
-    if (resume) {
-        const auto path = format("{}/{}x{}.partial", kPatternsPath, rows, cols);
-        const Pattern p = LoadPatternsFromFile(path).back();
-        LoadPatternIntoEnv(env, p);
-        icode_min = Encode(env);
-        // load pattern into code
-        for (int i = 0; i < p.cells.size(); i++) {
-            if (p.cells[i] == ' ') code[i] = 0;
-            if (p.cells[i] == '$') code[i] = 1;
-            if (p.cells[i] == '#') code[i] = 2;
-        }
-
-        print("starting pattern\n");
-        env.Print(false);
-        print("\n");
-    }
 
     std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
     ulong icode_max = std::pow(3, rows * cols) - 1;
@@ -624,16 +609,11 @@ void FindAll(int rows, int cols, bool resume = false) {
         env.Print(false);
         print("\n");
     }
+
     running = false;
     monitor.join();
     print("{} x {} -> {}\n", rows, cols, count);
 }
-
-// TODO:
-// - Parallelize!
-// - Change LevelEnv to vector<char> and solve it directly, to avoid building Level structure.
-// - Match smaller patters!
-// - Match previously found patterns of same size!
 
 int main(int argc, char* argv[]) {
     std::filesystem::create_directories(kPatternsPath);
@@ -644,8 +624,11 @@ int main(int argc, char* argv[]) {
     FindAll(3, 4);
     FindAll(3, 5);
     FindAll(4, 4); // 49s (including all above)*/
-    //FindAll(4, 5, true);
+    FindAll(4, 4);
     //FindAll(3, 6);
-    FindAll(3, 7, true);
+    //FindAll(4, 5);
+    //FindAll(3, 7);
+    //FindAll(3, 8);
+    //FindAll(5, 5);
     return 0;
 }
