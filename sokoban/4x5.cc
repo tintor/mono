@@ -82,6 +82,7 @@ struct Level {
     int num_boxes = 0;
     static_vector<Cell, MaxCells> cell; // inner cells + one 0 cell to represent all sinks
 
+    Level() {}
     Level(const int rows, const int cols) : rows(rows), cols(cols), cell(1 + rows * cols) {
         for (int d = 0; d < 4; d++) {
             cell[0]._dir[d] = 0;
@@ -99,6 +100,7 @@ struct Level {
             }
         }
     }
+    Level(const vector<string>& lines, bool emoji = false);
 
     bool Increment();
     void Prepare();
@@ -112,7 +114,7 @@ struct Level {
         return 1 + y * cols + x;
     }
     const Cell& operator[](const int i) const {
-        if (i < 0 || i >= cell.size()) THROW(runtime_error, "operator[]");
+        if (i < 0 || i >= cell.size()) THROW(runtime_error, "operator[] {}", i);
         return cell[i];
     }
     const Cell& operator()(const int x, const int y) const { return cell[at(x, y)]; }
@@ -123,6 +125,43 @@ constexpr string_view kAgent = "😀";
 constexpr string_view kEmpty = "  ";
 constexpr string_view kBox = "🔴";
 constexpr string_view kWall = "✴️ ";
+
+Level::Level(const vector<string>& lines, bool emoji) {
+    if (lines.size() == 0) THROW(runtime_error, "empty lines");
+    for (const string& line : lines) {
+        if (line.size() != lines[0].size()) THROW(runtime_error, "uneven line");
+    }
+    rows = lines.size();
+
+    if (emoji) {
+        if (lines[0].size() % 2 != 0) THROW(runtime_error, "bad line {}", lines[0].size());
+        cols = lines[0].size() / 2;
+        cell.resize(1 + rows * cols);
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                Cell& v = cell[at(c, r)];
+                string_view m(lines[r].data() + c * 2, 2);
+                if (m == kEmpty) continue;
+                if (m == kWall) { v.wall = true; continue; }
+                if (m == kBox) { v.box = true; continue; }
+                THROW(runtime_error, "unexpected cell: {}", m);
+            }
+        }
+    } else {
+        cols = lines[0].size();
+        cell.resize(1 + rows * cols);
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                Cell& v = cell[at(c, r)];
+                char m = lines[r][c];
+                if (m == ' ') continue;
+                if (m == '#') { v.wall = true; continue; }
+                if (m == '$') { v.box = true; continue; }
+                THROW(runtime_error, "unexpected cell: {}", m);
+            }
+        }
+    }
+}
 
 void Level::Print(ostream& os) const {
     for (int r = 0; r < rows; r++) {
@@ -161,7 +200,7 @@ Boxes Level::GetBoxes() const {
 }
 
 bool Level::Increment() {
-    for (size_t i = 1; i <= cell.size(); i++) {
+    for (size_t i = 1; i < cell.size(); i++) {
         Cell& c = cell[i];
 
         if (c.box) {
@@ -356,7 +395,7 @@ void normalize(const Level& level, int& agent, const Boxes& boxes) {
 }
 
 template <typename Push>
-bool for_each_push(const Level& level, const int agent, const Boxes& boxes, const Push& push) {
+void for_each_push(const Level& level, const int agent, const Boxes& boxes, const Push& push) {
     AgentVisitor visitor;
     visitor.add(agent);
     for (const int a : visitor) {
@@ -366,10 +405,9 @@ bool for_each_push(const Level& level, const int agent, const Boxes& boxes, cons
                 continue;
             }
             const int c = level[b].dir(d);
-            if (!level[c].wall && level[c].alive && !boxes[c] && push(a, b, d)) return true;
+            if (!level[c].wall && level[c].alive && !boxes[c]) push(a, b, d);
         }
     }
-    return false;
 }
 
 bool is_simple_deadlock(const Level& level, const int box, const Boxes& boxes) {
@@ -407,13 +445,24 @@ struct Solver {
     bool IsSolveable(Level& level);
 
     flat_hash_set<State> visited;
-    vector<State> remaining;
+    vector<vector<State>> remaining;
 
+    // Canonical only.
     flat_hash_set<ulong> solveable;
     flat_hash_set<ulong> unsolveable;
+
+    // Includes non-canonical.
+    flat_hash_set<State> known_deadlocks;
 };
 
-// TODO if it is possible to push one box into sink without pushing other box, then no need to run IsMinimal()
+int NumBoxes(const Level& level) {
+    int count = 0;
+    for (int i = 1; i < level.cell.size(); i++) {
+        if (level.cell[i].box) count += 1;
+    }
+    return count;
+}
+
 bool Solver::IsSolveable(Level& level) {
     ulong canonical_icode = Canonical(level);
     if (solveable.contains(canonical_icode)) return true;
@@ -424,50 +473,54 @@ bool Solver::IsSolveable(Level& level) {
     normalize(level, start.agent, start.boxes);
 
     visited.clear();
-    remaining.clear();
+    remaining.resize(level.rows * level.cols + 1);
+    for (auto& q : remaining) q.clear();
     visited.insert(start);
-    remaining.push_back(start);
+    int minimal = NumBoxes(level);
+    remaining[minimal].push_back(start);
+    size_t queued = 1;
 
     //print("solving\n");
-    while (!remaining.empty()) {
-        const State s = remaining.back(); // TODO focus on states with fewer boxes!
-        remaining.pop_back();
+    while (minimal > 0 && queued > 0) {
+        while (remaining[minimal].empty()) minimal += 1;
+        const State s = remaining[minimal].back();
+        remaining[minimal].pop_back();
+        queued -= 1;
+        const int s_num_boxes = minimal;
+
         //print("pop {}\n", s.boxes.data);
         //level.Print(s);
 
-        if (for_each_push(level, s.agent, s.boxes, [&](const int a, const int b, const int dir) {
+        for_each_push(level, s.agent, s.boxes, [&](const int a, const int b, const int dir) {
             State ns = s;
             const int c = level[b].dir(dir);
+            ns.agent = b;
             ns.boxes.reset(b);
+            if (c != 0) ns.boxes.set(c);
 
-            if (c == 0) {
-                if (ns.boxes == Boxes()) return true;
-                //print("  -> {}\n", ns.boxes.data);
-                //level.Print(ns);
-            } else {
-                ns.boxes.set(c);
-                //print("  -> {}\n", ns.boxes.data);
-                //level.Print(ns);
-                if (is_simple_deadlock(level, c, ns.boxes)) return false;
-            }
+            //print("  -> {}\n", ns.boxes.data);
+            //level.Print(ns);
 
-            if (ns.agent != 0) normalize(level, ns.agent, ns.boxes);
-            if (visited.contains(ns)) return false;
+            if (c != 0 && is_simple_deadlock(level, c, ns.boxes)) return;
+            normalize(level, ns.agent, ns.boxes);
+            if (visited.contains(ns) /*|| known_deadlocks.contains(ns)*/) return;
             visited.insert(ns);
-            remaining.push_back(ns);
-            return false;
-        })) {
-            //print("solved!\n");
-            solveable.insert(canonical_icode);
-            return true;
-        }
+            const int ns_num_boxes = (c == 0) ? s_num_boxes - 1 : s_num_boxes;
+            remaining[ns_num_boxes].push_back(ns);
+            if (ns_num_boxes < minimal) minimal = ns_num_boxes;
+            queued += 1;
+        });
+    }
+
+    if (minimal == 0) {
+        //print("solved!\n");
+        solveable.insert(canonical_icode);
+        return true;
     }
 
     //print("no solution!\n");
     unsolveable.insert(canonical_icode);
-    /*for (const State& s : visited) {
-        if (s.agent == 0) unsolveable.insert(Encode(level, s));
-    }*/
+    //for (const State& s : visited) known_deadlocks.insert(s);
     return false;
 }
 
@@ -545,10 +598,8 @@ bool HasWallCorner(const Level& e) {
 }
 
 bool Has2x2Deadlock(const Level& e) {
-    const int rows = e.rows;
-    const int cols = e.cols;
-    for (int r = 0; r < rows - 1; r++) {
-        for (int c = 0; c < cols - 1; c++) {
+    for (int r = 0; r < e.rows - 1; r++) {
+        for (int c = 0; c < e.cols - 1; c++) {
             int boxes = 0;
             if (Box(e, r, c)) boxes += 1;
             if (Box(e, r+1, c)) boxes += 1;
@@ -735,11 +786,58 @@ void LoadPattern(Level& level, const Pattern& p) {
     }
 }
 
+Level g_level;
+Solver g_solver;
+int g_count;
+
+void Backtrack(int p) {
+    if (p == g_level.cell.size()) return;
+
+    // SPACE
+    Backtrack(p + 1);
+
+    // BOX
+    bool deadlock_with_box = false;
+    g_level.cell[p].box = true;
+    g_level.num_boxes += 1;
+    if (g_level.num_boxes == 0 || g_solver.IsSolveable(g_level)) {
+        if (!Has2x2Deadlock(g_level)) Backtrack(p + 1);
+    } else {
+        deadlock_with_box = true;
+        if (g_level.num_boxes >= 2 && !HasFreeCornerBox(g_level) && !HasEmptyRowX(g_level) && !HasEmptyColX(g_level) && IsCanonical(g_level, Encode(g_level)) && IsMinimal(g_level, &g_solver)) {
+            g_level.Print();
+            g_count += 1;
+        }
+    }
+    g_level.num_boxes -= 1;
+    g_level.cell[p].box = false;
+    if (deadlock_with_box) return;  // it will also be deadlock with wall
+
+    // WALL
+    g_level.cell[p].wall = true;
+    if (g_level.num_boxes == 0 || g_solver.IsSolveable(g_level)) {
+        if (!Has2x2Deadlock(g_level)) Backtrack(p + 1);
+    } else {
+        if (g_level.num_boxes >= 2 && !HasFreeCornerBox(g_level) && !HasEmptyRowX(g_level) && !HasEmptyColX(g_level) && IsCanonical(g_level, Encode(g_level)) && IsMinimal(g_level, &g_solver)) {
+            g_level.Print();
+            g_count += 1;
+        }
+    }
+    g_level.cell[p].wall = false;
+}
+
+void FindAll2(int rows, int cols) {
+    g_level = Level(rows, cols);
+    g_solver = Solver();
+    g_count = 0;
+    Backtrack(1);
+}
+
 void FindAll(int rows, int cols) {
     //Patterns patterns;
     //patterns.LoadFromDisk();
 
-    std::ofstream of(format("{}/{}x{}.new", kPatternsPath, rows, cols));
+    std::ofstream of(format("{}/{}x{}.new3", kPatternsPath, rows, cols));
     ulong icode_max = std::pow(3, rows * cols) - 1;
     ulong icode = 0;
 
@@ -761,11 +859,14 @@ void FindAll(int rows, int cols) {
             print(", icode {}", icode);
             print(", solvable {}", solver.solveable.size());
             print(", unsolveable {}", solver.unsolveable.size());
+            print(", known_deadlocks {}", solver.known_deadlocks.size());
             print(", patterns {}", count);
 
             double elapsed = start_ts.elapsed_s();
             double eta = (1 - progress) * elapsed / progress;
             long eta_hours = eta / 3600;
+            long elapsed_hours = elapsed / 3600;
+            print(", elapsed {}:{}", elapsed_hours, (elapsed - elapsed_hours * 3600) / 60);
             print(", ETA {}:{}\n", eta_hours, (eta - eta_hours * 3600) / 60);
         }
     });
@@ -778,8 +879,8 @@ void FindAll(int rows, int cols) {
         if (HasEmptyRowX(level) || HasEmptyColX(level)) continue;
         if (Has2x2Deadlock(level)) continue;
 
-        //if (HasFreeBox(level)) continue;
         if (!IsCanonical(level, icode)) continue;
+        if (HasFreeBox(level)) continue;
         // if (patterns.Matches(env)) continue;
         if (solver.IsSolveable(level)) continue;
         if (!IsMinimal(level, &solver)) continue;
@@ -811,15 +912,15 @@ int main(int argc, char* argv[]) {
     InitSegvHandler();
 
     std::filesystem::create_directories(kPatternsPath);
-    FindAll(2, 3);
+    /*FindAll(2, 3);
     FindAll(2, 4);
     FindAll(3, 3);
     FindAll(2, 5);
     FindAll(3, 4);
     FindAll(3, 5);
-    FindAll(4, 4); // 9s (including all above)
-    FindAll(3, 6); // 1m25s (including all above)
-    //FindAll(4, 5);
+    FindAll(4, 4); // old 9s (including all above)
+    FindAll(3, 6);*/ // old 1m3s (including all above)
+    FindAll(4, 5); // 7m39s
     //FindAll(3, 7);
     //FindAll(3, 8);
     //FindAll(5, 5);
