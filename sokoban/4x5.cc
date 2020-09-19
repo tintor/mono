@@ -613,6 +613,19 @@ bool HasWallCorner(const Level& e) {
     return false;
 }
 
+bool HasWallTetris(const Level& level) {
+    for (const Cell& v : level.cell) {
+        if (v.wall) {
+            int w = 0;
+            for (int i = 0; i < 4; i++) {
+                if (level.cell[v._dir[i]].wall) w += 1;
+            }
+            if (w >= 3) return true;
+        }
+    }
+    return false;
+}
+
 bool Has2x2Deadlock(const Level& e) {
     for (int r = 0; r < e.rows - 1; r++) {
         for (int c = 0; c < e.cols - 1; c++) {
@@ -853,7 +866,7 @@ void FindAll(int rows, int cols) {
     //Patterns patterns;
     //patterns.LoadFromDisk();
 
-    //std::ofstream of(format("{}/{}x{}.new3", kPatternsPath, rows, cols));
+    std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
     ulong icode_max = std::pow(3, rows * cols) - 1;
     ulong icode = 0;
 
@@ -889,6 +902,7 @@ void FindAll(int rows, int cols) {
         if (level.num_boxes < 2) continue;
         if (HasWallCorner(level)) continue;
         if (HasFreeCornerBox(level)) continue;
+        if (HasWallTetris(level)) continue;
         if (HasEmptyRowX(level) || HasEmptyColX(level)) continue;
         if (Has2x2Deadlock(level)) continue;
 
@@ -899,7 +913,7 @@ void FindAll(int rows, int cols) {
         if (!IsMinimal(level, &solver)) continue;
 
         count += 1;
-        //level.Print(of);
+        level.Print(of);
         level.Print();
     }
 
@@ -932,9 +946,9 @@ int main(int argc, char* argv[]) {
     FindAll(2, 5);
     FindAll(3, 4);
     FindAll(3, 5);
-    FindAll(4, 4); // old 9s (including all above)
-    FindAll(3, 6);*/ // old 1m3s (including all above)
-    FindAll(4, 5); // 7m25s
+    FindAll(4, 4);*/ // old 9s (including all above)
+    FindAll(3, 6);
+    //FindAll(4, 5); // 7m13s
     //FindAll(3, 7);
     //FindAll(3, 8);
     //FindAll(5, 5);
