@@ -451,8 +451,7 @@ struct Solver {
     flat_hash_set<ulong> solveable;
     flat_hash_set<ulong> unsolveable;
 
-    // Includes non-canonical.
-    flat_hash_set<State> known_deadlocks;
+    Level tmp;
 };
 
 int NumBoxes(const Level& level) {
@@ -461,6 +460,17 @@ int NumBoxes(const Level& level) {
         if (level.cell[i].box) count += 1;
     }
     return count;
+}
+
+void CopyWalls(const Level& level, Level* out) {
+    out->rows = level.rows;
+    out->cols = level.cols;
+    out->cell.resize(level.cell.size());
+    for (int i = 1; i < level.cell.size(); i++) out->cell[i].wall = level.cell[i].wall;
+}
+
+void CopyBoxes(const Boxes& boxes, Level* out) {
+    for (int i = 1; i < out->cell.size(); i++) out->cell[i].box = boxes[i];
 }
 
 bool Solver::IsSolveable(Level& level) {
@@ -503,7 +513,7 @@ bool Solver::IsSolveable(Level& level) {
 
             if (c != 0 && is_simple_deadlock(level, c, ns.boxes)) return;
             normalize(level, ns.agent, ns.boxes);
-            if (visited.contains(ns) /*|| known_deadlocks.contains(ns)*/) return;
+            if (visited.contains(ns)) return;
             visited.insert(ns);
             const int ns_num_boxes = (c == 0) ? s_num_boxes - 1 : s_num_boxes;
             remaining[ns_num_boxes].push_back(ns);
@@ -520,7 +530,13 @@ bool Solver::IsSolveable(Level& level) {
 
     //print("no solution!\n");
     unsolveable.insert(canonical_icode);
-    //for (const State& s : visited) known_deadlocks.insert(s);
+    CopyWalls(level, &tmp);
+    for (const State& s : visited) {
+        if (s.agent == 0) {
+            CopyBoxes(s.boxes, &tmp);
+            unsolveable.insert(Canonical(tmp));
+        }
+    }
     return false;
 }
 
@@ -837,7 +853,7 @@ void FindAll(int rows, int cols) {
     //Patterns patterns;
     //patterns.LoadFromDisk();
 
-    std::ofstream of(format("{}/{}x{}.new3", kPatternsPath, rows, cols));
+    //std::ofstream of(format("{}/{}x{}.new3", kPatternsPath, rows, cols));
     ulong icode_max = std::pow(3, rows * cols) - 1;
     ulong icode = 0;
 
@@ -859,15 +875,12 @@ void FindAll(int rows, int cols) {
             print(", icode {}", icode);
             print(", solvable {}", solver.solveable.size());
             print(", unsolveable {}", solver.unsolveable.size());
-            print(", known_deadlocks {}", solver.known_deadlocks.size());
             print(", patterns {}", count);
 
             double elapsed = start_ts.elapsed_s();
             double eta = (1 - progress) * elapsed / progress;
-            long eta_hours = eta / 3600;
-            long elapsed_hours = elapsed / 3600;
-            print(", elapsed {}:{}", elapsed_hours, (elapsed - elapsed_hours * 3600) / 60);
-            print(", ETA {}:{}\n", eta_hours, (eta - eta_hours * 3600) / 60);
+            print(", elapsed {}", elapsed / 60);
+            print(", eta {}\n", eta / 60);
         }
     });
 
@@ -886,13 +899,14 @@ void FindAll(int rows, int cols) {
         if (!IsMinimal(level, &solver)) continue;
 
         count += 1;
-        level.Print(of);
+        //level.Print(of);
         level.Print();
     }
 
     running = false;
     monitor.join();
-    print("{} x {} -> {}\n", rows, cols, count);
+    print("{} x {} -> {}", rows, cols, count);
+    print(", elapsed {}\n", start_ts.elapsed_s() / 60);
 }
 
 // Solving 5x5:
@@ -920,7 +934,7 @@ int main(int argc, char* argv[]) {
     FindAll(3, 5);
     FindAll(4, 4); // old 9s (including all above)
     FindAll(3, 6);*/ // old 1m3s (including all above)
-    FindAll(4, 5); // 7m39s
+    FindAll(4, 5); // 7m25s
     //FindAll(3, 7);
     //FindAll(3, 8);
     //FindAll(5, 5);
