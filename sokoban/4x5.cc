@@ -626,7 +626,7 @@ bool Patterns::Matches(const Level& level) const {
     return false;
 }
 
-vector<Pattern> LoadPatternsFromFile(string_view path) {
+vector<Pattern> LoadPatternsFromFile(const string& path) {
     vector<Pattern> patterns;
     vector<string> lines;
 
