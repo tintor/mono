@@ -7,6 +7,7 @@
 #include "core/murmur3.h"
 #include "core/callstack.h"
 #include "core/each.h"
+#include "core/thread.h"
 
 #include "absl/container/flat_hash_set.h"
 
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <string_view>
 #include <fstream>
+#include <shared_mutex>
 
 using namespace std::chrono_literals;
 using std::string_view;
@@ -24,6 +26,10 @@ using std::pair;
 using std::ostream;
 using std::cout;
 using std::endl;
+using std::mutex;
+using std::shared_mutex;
+using std::shared_lock;
+using std::unique_lock;
 using absl::flat_hash_set;
 
 constexpr string_view kPatternsPath = "/tmp/sokoban/patterns";
@@ -669,10 +675,39 @@ void LoadPattern(Level& level, const Pattern& p) {
     }
 }
 
-using EPattern = vector<char>;
-using EPatterns = vector<EPattern>;
+struct EPatterns {
+    int size() const { return _count; }
 
-bool Matches(const EPattern& pattern, const vector<char>& code) {
+    string_view operator[](int i) const {
+        return string_view(_data.data() + i * _pattern_size, _pattern_size);
+    }
+
+    void add(const string_view a) {
+        if (_count == 0) {
+            _pattern_size = a.size();
+        } else {
+            if (a.size() != _pattern_size) THROW(runtime_error, "mismatch");
+        }
+        _data.insert(_data.end(), a.begin(), a.end());
+        _count += 1;
+    }
+
+    void add(const vector<char>& a) {
+        if (_count == 0) {
+            _pattern_size = a.size();
+        } else {
+            if (a.size() != _pattern_size) THROW(runtime_error, "mismatch");
+        }
+        _data.insert(_data.end(), a.begin(), a.end());
+        _count += 1;
+    }
+private:
+    int _count = 0;
+    int _pattern_size = 0;
+    vector<char> _data;
+};
+
+bool Matches(const string_view pattern, const vector<char>& code) {
     for (int i = 0; i < pattern.size(); i++) {
         if (pattern[i] > code[i]) return false;
     }
@@ -680,8 +715,8 @@ bool Matches(const EPattern& pattern, const vector<char>& code) {
 }
 
 bool ContainsExistingPattern(const EPatterns& patterns, const vector<char>& code) {
-    for (const EPattern& p : patterns) {
-        if (Matches(p, code)) return true;
+    for (int i = 0; i < patterns.size(); i++) {
+        if (Matches(patterns[i], code)) return true;
     }
     return false;
 }
@@ -756,14 +791,15 @@ XPattern& Get(XPatterns& xpatterns, int rows, int cols) {
 
 void AddPattern(XPatterns& xpatterns, int rows, int cols, const vector<char>& code) {
     XPattern& xp = Get(xpatterns, rows, cols);
-    xp.patterns.push_back(code);
+    xp.patterns.add(code);
 
     // Add all transformations of code!
-    const size_t num_patterns = xp.patterns.size();
+    const int num_patterns = xp.patterns.size();
     const int num_transforms = (rows == cols) ? 8 : 4;
+    string cc;
+    cc.resize(code.size());
+
     for (int i = 1; i < num_transforms; i++) {
-        vector<char> cc;
-        cc.resize(code.size());
         for (auto [r, c] : each_pair(rows, cols)) {
             int mr = r, mc = c;
             if (i & 1) mc = cols - 1 - mc;
@@ -773,14 +809,14 @@ void AddPattern(XPatterns& xpatterns, int rows, int cols, const vector<char>& co
         }
 
         bool symmetric = false;
-        for (size_t j = num_patterns; j < xp.patterns.size(); j++) {
+        for (int j = num_patterns; j < xp.patterns.size(); j++) {
             if (cc == xp.patterns[j]) {
                 symmetric = true;
                 break;
             }
         }
         if (!symmetric) {
-            xp.patterns.emplace_back(std::move(cc));
+            xp.patterns.add(cc);
         }
     }
 }
@@ -821,10 +857,9 @@ struct Permutations {
     int rows, cols;
     vector<char> code;
     XPatterns xpatterns;
-    Solver solver;
-    Level level;
-    vector<char> crop, transposed;
     std::ofstream of;
+
+    shared_mutex xpatterns_mutex;
 
     int Find(int boxes, int walls);
     int Find(int pieces);
@@ -832,46 +867,88 @@ struct Permutations {
     void Run(int rows, int cols);
 };
 
-int Permutations::Find(int boxes, int walls) {
+constexpr int Batch = 100;
+
+struct ThreadLocal {
+    array<vector<char>, Batch> code;
+    Level level;
+    vector<char> crop;
+    vector<char> transposed;
+    Solver solver;
+};
+
+int Permutations::Find(const int boxes, const int walls) {
     int w = 0;
     const int spaces = rows * cols - boxes - walls;
     for (int i = 0; i < spaces; i++) code[w++] = 0;
     for (int i = 0; i < boxes; i++) code[w++] = 1;
     for (int i = 0; i < walls; i++) code[w++] = 2;
 
+    mutex print_mutex;
+    mutex next_perm_mutex;
+
+    bool running = true;
     int count = 0;
-    do {
-        // Convert code to level
-        for (int i = 1; i < level.cell.size(); i++) {
-            char c = code[i - 1];
-            level.cell[i].box = c == 1;
-            level.cell[i].wall = c == 2;
+
+    parallel([&, walls, this]() {
+        static thread_local ThreadLocal w;
+        if (w.level.rows != rows || w.level.cols != cols) w.level.Reset(rows, cols);
+
+        while (true) {
+            int accum = 0;
+            {
+                unique_lock<mutex> lock(next_perm_mutex);
+                if (!running) break;
+                for (int i = 0; running && i < Batch; i++) {
+                    w.code[i] = code;
+                    accum += 1;
+                    running = std::next_permutation(code.begin(), code.end());
+                }
+            }
+
+            for (int batch = 0; batch < accum; batch++) {
+                // Convert code to level
+                const int num_cells = w.level.cell.size();
+                for (int i = 1; i < num_cells; i++) {
+                    char c = w.code[batch][i - 1];
+                    w.level.cell[i].box = c == 1;
+                    w.level.cell[i].wall = c == 2;
+                }
+
+                if (walls >= 3 && HasWallCorner(w.level)) continue;
+                if (HasFreeCornerBox(w.level)) continue;
+                if (walls >= 4 && HasWallTetris(w.level)) continue;
+                if (HasEmptyRowX(w.level) || HasEmptyColX(w.level)) continue;
+                if (Has2x2Deadlock(w.level)) continue;
+
+                if (!IsCanonical(w.code[batch], rows, cols)) continue;
+                if (HasFreeBox(w.level)) continue;
+
+                {
+                    shared_lock lock(xpatterns_mutex);
+                    if (ContainsExistingPattern(xpatterns, rows, cols, w.code[batch], w.crop, w.transposed)) continue;
+                    if (w.solver.IsSolveable(w.level)) continue;
+                }
+
+                {
+                    unique_lock lock(xpatterns_mutex);
+                    AddPattern(xpatterns, rows, cols, w.code[batch]);
+                }
+
+                unique_lock<mutex> lock(print_mutex);
+                count += 1;
+                w.level.Print();
+                w.level.Print(of);
+            }
         }
+    });
 
-        if (walls >= 3 && HasWallCorner(level)) continue;
-        if (HasFreeCornerBox(level)) continue;
-        if (walls >= 4 && HasWallTetris(level)) continue;
-        if (HasEmptyRowX(level) || HasEmptyColX(level)) continue;
-        if (Has2x2Deadlock(level)) continue;
-
-        if (!IsCanonical(code, rows, cols)) continue;
-        if (HasFreeBox(level)) continue;
-
-        if (ContainsExistingPattern(xpatterns, rows, cols, code, crop, transposed)) continue;
-        if (solver.IsSolveable(level)) continue;
-
-        AddPattern(xpatterns, rows, cols, code);
-        level.Print();
-        level.Print(of);
-        count += 1;
-    } while (std::next_permutation(code.begin(), code.end()));
     return count;
 }
 
 int Permutations::Find(const int pieces) {
     int count = 0;
     for (int boxes = pieces; boxes >= 1; boxes--) {
-        if (rows * cols >= 20) print("{} x {} with {} boxes {} walls\n", rows, cols, boxes, pieces - boxes);
         count += Find(boxes, pieces - boxes);
     }
     return count;
@@ -881,10 +958,7 @@ void Permutations::Run(const int rows, const int cols) {
     this->rows = rows;
     this->cols = cols;
     code.resize(rows * cols);
-    crop.reserve(rows * cols);
-    transposed.reserve(rows * cols);
-    level.Reset(rows, cols);
-    of = std::ofstream(format("{}/{}x{}", kPatternsPath, rows, cols));
+    of = std::ofstream(format("{}/{}x{}.mt", kPatternsPath, rows, cols));
 
     print("{} x {}\n", rows, cols);
 
@@ -912,18 +986,10 @@ int main(int argc, char* argv[]) {
     p.Run(2, 5); // 10
     p.Run(2, 6); // 12
     p.Run(3, 4); // 12
-    p.Run(2, 7); // 14
     p.Run(3, 5); // 15
-    p.Run(2, 8); // 16
-    p.Run(4, 4); // 16 - 9s (all)
-    p.Run(2, 9); // 16
-    p.Run(3, 6); // 18 - 1m 4s (all)
-    p.Run(2, 10); // 20
-    p.Run(4, 5); // 20 - 7m 3s (all - except 2:10)
-    p.Run(3, 7); // 21
-    p.Run(2, 11); // 22
-    p.Run(2, 12); // 24
-    p.Run(3, 8); // 24
+    p.Run(4, 4); // 16
+    p.Run(3, 6); // 18
+    p.Run(4, 5); // 20
     p.Run(4, 6); // 24
     p.Run(5, 5); // 25
     return 0;

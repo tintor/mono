@@ -79,7 +79,7 @@ cc_binary(
     name = "4x5",
     srcs = ["4x5.cc"],
     deps = [
-        "//core:timestamp", "//core:fmt", "//core:file", "//core:vector", "//core:matrix", "//core:bits",
+        "//core:thread", "//core:timestamp", "//core:fmt", "//core:file", "//core:vector", "//core:matrix", "//core:bits",
         "@absl//absl/container:flat_hash_set",
     ],
 )
