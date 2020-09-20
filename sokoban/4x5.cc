@@ -676,6 +676,13 @@ void LoadPattern(Level& level, const Pattern& p) {
 }
 
 struct EPatterns {
+    EPatterns() {}
+
+    EPatterns(EPatterns&& o) : _count(o._count), _pattern_size(o._pattern_size), _data(std::move(o._data)) {
+        o._count = 0;
+        o._pattern_size = 0;
+    }
+
     int size() const { return _count; }
 
     string_view operator[](int i) const {
@@ -701,6 +708,7 @@ struct EPatterns {
         _data.insert(_data.end(), a.begin(), a.end());
         _count += 1;
     }
+
 private:
     int _count = 0;
     int _pattern_size = 0;
@@ -724,6 +732,8 @@ bool ContainsExistingPattern(const EPatterns& patterns, const vector<char>& code
 struct XPattern {
     int rows, cols;
     EPatterns patterns;
+
+    XPattern(int rows, int cols, EPatterns o) : rows(rows), cols(cols), patterns(std::move(o)) {}
 };
 
 using XPatterns = vector<XPattern>;
@@ -781,20 +791,11 @@ bool ContainsExistingPattern(const XPatterns& xpatterns, int rows, int cols, con
     return false;
 }
 
-XPattern& Get(XPatterns& xpatterns, int rows, int cols) {
-    for (auto it = xpatterns.rbegin(); it != xpatterns.rend(); it++) {
-        if (it->rows == rows && it->cols == cols) return *it;
-    }
-    xpatterns.emplace_back(XPattern{rows, cols, {}});
-    return xpatterns.back();
-}
-
-void AddPattern(XPatterns& xpatterns, int rows, int cols, const vector<char>& code) {
-    XPattern& xp = Get(xpatterns, rows, cols);
-    xp.patterns.add(code);
+void AddPattern(EPatterns& patterns, int rows, int cols, const vector<char>& code) {
+    patterns.add(code);
 
     // Add all transformations of code!
-    const int num_patterns = xp.patterns.size();
+    const int num_patterns = patterns.size();
     const int num_transforms = (rows == cols) ? 8 : 4;
     string cc;
     cc.resize(code.size());
@@ -809,14 +810,14 @@ void AddPattern(XPatterns& xpatterns, int rows, int cols, const vector<char>& co
         }
 
         bool symmetric = false;
-        for (int j = num_patterns; j < xp.patterns.size(); j++) {
-            if (cc == xp.patterns[j]) {
+        for (int j = num_patterns; j < patterns.size(); j++) {
+            if (cc == patterns[j]) {
                 symmetric = true;
                 break;
             }
         }
         if (!symmetric) {
-            xp.patterns.add(cc);
+            patterns.add(cc);
         }
     }
 }
@@ -859,7 +860,8 @@ struct Permutations {
     XPatterns xpatterns;
     std::ofstream of;
 
-    shared_mutex xpatterns_mutex;
+    shared_mutex new_patterns_mutex;
+    EPatterns new_patterns;
 
     int Find(int boxes, int walls);
     int Find(int pieces);
@@ -924,15 +926,12 @@ int Permutations::Find(const int boxes, const int walls) {
                 if (!IsCanonical(w.code[batch], rows, cols)) continue;
                 if (HasFreeBox(w.level)) continue;
 
-                {
-                    shared_lock lock(xpatterns_mutex);
-                    if (ContainsExistingPattern(xpatterns, rows, cols, w.code[batch], w.crop, w.transposed)) continue;
-                    if (w.solver.IsSolveable(w.level)) continue;
-                }
+                if (ContainsExistingPattern(xpatterns, rows, cols, w.code[batch], w.crop, w.transposed)) continue;
+                if (w.solver.IsSolveable(w.level)) continue;
 
                 {
-                    unique_lock lock(xpatterns_mutex);
-                    AddPattern(xpatterns, rows, cols, w.code[batch]);
+                    unique_lock lock(new_patterns_mutex);
+                    AddPattern(new_patterns, rows, cols, w.code[batch]);
                 }
 
                 unique_lock<mutex> lock(print_mutex);
@@ -943,6 +942,9 @@ int Permutations::Find(const int boxes, const int walls) {
         }
     });
 
+    if (new_patterns.size() > 0) {
+        xpatterns.emplace_back(rows, cols, std::move(new_patterns));
+    }
     return count;
 }
 
