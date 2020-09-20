@@ -110,7 +110,7 @@ struct Level {
         }
     }
 
-    bool Increment();
+    //bool Increment();
     void Prepare();
     void Print(ostream& os = cout) const;
     void Print(const State& s) const;
@@ -207,30 +207,6 @@ Boxes Level::GetBoxes() const {
     return b;
 }
 
-bool Level::Increment() {
-    for (size_t i = 1; i < cell.size(); i++) {
-        Cell& c = cell[i];
-
-        if (c.box) {
-            c.box = false;
-            c.wall = true;
-            num_boxes -= 1;
-            return true;
-        }
-
-        if (c.wall) {
-            c.wall = false;
-            continue;
-        }
-
-        c.wall = false;
-        c.box = true;
-        num_boxes += 1;
-        return true;
-    }
-    return false;
-}
-
 void Level::Prepare() {
     // Init moves
     cell[0].moves.clear();
@@ -265,68 +241,6 @@ void Level::Prepare() {
             }
         }
     }
-}
-
-ulong Encode(const Level& e) {
-    ulong a = 0;
-    ulong p = 1;
-
-    for (int r = 0; r < e.rows; r++) {
-        for (int c = 0; c < e.cols; c++) {
-            if (e(c, r).wall) a += p * 2;
-            if (e(c, r).box) a += p;
-            p *= 3;
-        }
-    }
-    return a;
-}
-
-ulong Encode(const Level& e, int transform) {
-    ulong a = 0;
-    ulong p = 1;
-
-    for (int r = 0; r < e.rows; r++) {
-        for (int c = 0; c < e.cols; c++) {
-            int mr = r, mc = c;
-            // TODO move these IFs outside of loop
-            if (transform & 1) {
-                // mirror x
-                mc = e.cols - 1 - mc;
-            }
-            if (transform & 2) {
-                // mirror y
-                mr = e.rows - 1 - mr;
-            }
-            if (transform & 4) {
-                // transpose
-                std::swap(mr, mc);
-            }
-            if (e(mc, mr).wall) a += p * 2;
-            if (e(mc, mr).box) a += p;
-            p *= 3;
-        }
-    }
-    return a;
-}
-
-int Transforms(const Level& e) {
-    return (e.cols == e.rows) ? 8 : 4;
-}
-
-bool IsCanonical(const Level& e, ulong icode) {
-    const int transforms = Transforms(e);
-    for (int i = 1; i < transforms; i++) {
-        ulong a = Encode(e, i);
-        if (a < icode) return false;
-    }
-    return true;
-}
-
-ulong Canonical(const Level& e) {
-    const int transforms = Transforms(e);
-    ulong a = -1;
-    for (int i = 0; i < transforms; i++) a = std::min(a, Encode(e, i));
-    return a;
 }
 
 class AgentVisitor : public each<AgentVisitor> {
@@ -450,16 +364,10 @@ struct hash<State> {
 }  // namespace std
 
 struct Solver {
-    bool IsSolveable(Level& level, bool cache = true);
+    bool IsSolveable(Level& level);
 
     flat_hash_set<State> visited;
     vector<vector<State>> remaining;
-
-    // Canonical only.
-    flat_hash_set<ulong> solveable;
-    flat_hash_set<ulong> unsolveable;
-
-    Level tmp;
 };
 
 int NumBoxes(const Level& level) {
@@ -470,25 +378,7 @@ int NumBoxes(const Level& level) {
     return count;
 }
 
-void CopyWalls(const Level& level, Level* out) {
-    out->rows = level.rows;
-    out->cols = level.cols;
-    out->cell.resize(level.cell.size());
-    for (int i = 1; i < level.cell.size(); i++) out->cell[i].wall = level.cell[i].wall;
-}
-
-void CopyBoxes(const Boxes& boxes, Level* out) {
-    for (int i = 1; i < out->cell.size(); i++) out->cell[i].box = boxes[i];
-}
-
-bool Solver::IsSolveable(Level& level, bool cache) {
-    ulong canonical_icode;
-    if (cache) {
-        canonical_icode = Canonical(level);
-        if (solveable.contains(canonical_icode)) return true;
-        if (unsolveable.contains(canonical_icode)) return false;
-    }
-
+bool Solver::IsSolveable(Level& level) {
     level.Prepare();
     State start{level.GetBoxes(), 0};
     normalize(level, start.agent, start.boxes);
@@ -501,16 +391,13 @@ bool Solver::IsSolveable(Level& level, bool cache) {
     remaining[minimal].push_back(start);
     size_t queued = 1;
 
-    //print("solving\n");
-    while (minimal > 0 && queued > 0) {
+    while (queued > 0) {
+        if (minimal == 0) return true;
         while (remaining[minimal].empty()) minimal += 1;
         const State s = remaining[minimal].back();
         remaining[minimal].pop_back();
         queued -= 1;
         const int s_num_boxes = minimal;
-
-        //print("pop {}\n", s.boxes.data);
-        //level.Print(s);
 
         for_each_push(level, s.agent, s.boxes, [&](const int a, const int b, const int dir) {
             State ns = s;
@@ -518,9 +405,6 @@ bool Solver::IsSolveable(Level& level, bool cache) {
             ns.agent = b;
             ns.boxes.reset(b);
             if (c != 0) ns.boxes.set(c);
-
-            //print("  -> {}\n", ns.boxes.data);
-            //level.Print(ns);
 
             if (c != 0 && is_simple_deadlock(level, c, ns.boxes)) return;
             normalize(level, ns.agent, ns.boxes);
@@ -531,24 +415,6 @@ bool Solver::IsSolveable(Level& level, bool cache) {
             if (ns_num_boxes < minimal) minimal = ns_num_boxes;
             queued += 1;
         });
-    }
-
-    if (minimal == 0) {
-        //print("solved!\n");
-        if (cache) solveable.insert(canonical_icode);
-        return true;
-    }
-
-    //print("no solution!\n");
-    if (cache) {
-        unsolveable.insert(canonical_icode);
-        CopyWalls(level, &tmp);
-        for (const State& s : visited) {
-            if (s.agent == 0) {
-                CopyBoxes(s.boxes, &tmp);
-                unsolveable.insert(Canonical(tmp));
-            }
-        }
     }
     return false;
 }
@@ -664,31 +530,6 @@ bool Has2x2Deadlock(const Level& e) {
         }
     }
     return false;
-}
-
-bool IsMinimal(Level& level, Solver* solver) {
-    for (Cell& v : level.cell) {
-        if (v.box) {
-            v.box = false;
-            bool m = solver->IsSolveable(level);
-            v.box = true;
-            if (!m) return false;
-        }
-        if (v.wall) {
-            v.wall = false;
-            bool m = solver->IsSolveable(level);
-            v.wall = true;
-            if (!m) return false;
-
-            v.box = true;
-            v.wall = false;
-            m = solver->IsSolveable(level);
-            v.box = false;
-            v.wall = true;
-            if (!m) return false;
-        }
-    }
-    return true;
 }
 
 struct Pattern {
@@ -826,114 +667,6 @@ void LoadPattern(Level& level, const Pattern& p) {
             if (m != ' ' && m != '$' && m != '#') THROW(runtime_error, "unexpected char {}", m);
         }
     }
-}
-
-Level g_level;
-Solver g_solver;
-int g_count;
-
-void Backtrack(int p) {
-    if (p == g_level.cell.size()) return;
-
-    // SPACE
-    Backtrack(p + 1);
-
-    // BOX
-    bool deadlock_with_box = false;
-    g_level.cell[p].box = true;
-    g_level.num_boxes += 1;
-    if (g_level.num_boxes == 0 || g_solver.IsSolveable(g_level)) {
-        if (!Has2x2Deadlock(g_level)) Backtrack(p + 1);
-    } else {
-        deadlock_with_box = true;
-        if (g_level.num_boxes >= 2 && !HasFreeCornerBox(g_level) && !HasEmptyRowX(g_level) && !HasEmptyColX(g_level) && IsCanonical(g_level, Encode(g_level)) && IsMinimal(g_level, &g_solver)) {
-            g_level.Print();
-            g_count += 1;
-        }
-    }
-    g_level.num_boxes -= 1;
-    g_level.cell[p].box = false;
-    if (deadlock_with_box) return;  // it will also be deadlock with wall
-
-    // WALL
-    g_level.cell[p].wall = true;
-    if (g_level.num_boxes == 0 || g_solver.IsSolveable(g_level)) {
-        if (!Has2x2Deadlock(g_level)) Backtrack(p + 1);
-    } else {
-        if (g_level.num_boxes >= 2 && !HasFreeCornerBox(g_level) && !HasEmptyRowX(g_level) && !HasEmptyColX(g_level) && IsCanonical(g_level, Encode(g_level)) && IsMinimal(g_level, &g_solver)) {
-            g_level.Print();
-            g_count += 1;
-        }
-    }
-    g_level.cell[p].wall = false;
-}
-
-void FindAll2(int rows, int cols) {
-    g_level = Level(rows, cols);
-    g_solver = Solver();
-    g_count = 0;
-    Backtrack(1);
-}
-
-void FindAll(int rows, int cols) {
-    //Patterns patterns;
-    //patterns.LoadFromDisk();
-
-    std::ofstream of(format("{}/{}x{}", kPatternsPath, rows, cols));
-    ulong icode_max = std::pow(3, rows * cols) - 1;
-    ulong icode = 0;
-
-    Level level(rows, cols);
-    Solver solver;
-    int count = 0;
-
-    Timestamp start_ts;
-    std::atomic<bool> running = true;
-    std::thread monitor([&]() {
-        while (running) {
-            for (int i = 0; i < 10; i++) {
-                std::this_thread::sleep_for(500ms);
-                if (!running) return;
-            }
-
-            double progress = double(icode) / icode_max;
-            print("progress {}", progress);
-            print(", icode {}", icode);
-            print(", solvable {}", solver.solveable.size());
-            print(", unsolveable {}", solver.unsolveable.size());
-            print(", patterns {}", count);
-
-            double elapsed = start_ts.elapsed_s();
-            double eta = (1 - progress) * elapsed / progress;
-            print(", elapsed {}", elapsed / 60);
-            print(", eta {}\n", eta / 60);
-        }
-    });
-
-    while (level.Increment()) {
-        icode += 1;
-        if (level.num_boxes < 2) continue;
-        if (HasWallCorner(level)) continue;
-        if (HasFreeCornerBox(level)) continue;
-        if (HasWallTetris(level)) continue;
-        if (HasEmptyRowX(level) || HasEmptyColX(level)) continue;
-        if (Has2x2Deadlock(level)) continue;
-
-        if (!IsCanonical(level, icode)) continue;
-        if (HasFreeBox(level)) continue;
-        // if (patterns.Matches(env)) continue;
-        if (solver.IsSolveable(level)) continue;
-        if (!IsMinimal(level, &solver)) continue;
-
-        count += 1;
-        level.Print(of);
-        level.Print();
-    }
-
-    running = false;
-    monitor.join();
-    print("{} x {} -> {}", rows, cols, count);
-    print(", elapsed {}\n", start_ts.elapsed_s() / 60);
 }
 
 using EPattern = vector<char>;
@@ -1125,7 +858,7 @@ int Permutations::Find(int boxes, int walls) {
         if (HasFreeBox(level)) continue;
 
         if (ContainsExistingPattern(xpatterns, rows, cols, code, crop, transposed)) continue;
-        if (solver.IsSolveable(level, /*cache*/false)) continue;
+        if (solver.IsSolveable(level)) continue;
 
         AddPattern(xpatterns, rows, cols, code);
         level.Print();
