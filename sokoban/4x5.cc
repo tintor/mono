@@ -6,6 +6,7 @@
 #include "core/matrix.h"
 #include "core/murmur3.h"
 #include "core/callstack.h"
+#include "core/each.h"
 
 #include "absl/container/flat_hash_set.h"
 
@@ -83,10 +84,18 @@ struct Level {
     static_vector<Cell, MaxCells> cell; // inner cells + one 0 cell to represent all sinks
 
     Level() {}
-    Level(const int rows, const int cols) : rows(rows), cols(cols), cell(1 + rows * cols) {
+    Level(const int rows, const int cols) { Reset(rows, cols); }
+    Level(const vector<string>& lines, bool emoji = false);
+
+    void Reset(const int rows, const int cols) {
+        this->rows = rows;
+        this->cols = cols;
+        cell.resize(1 + rows * cols);
+
         for (int d = 0; d < 4; d++) {
             cell[0]._dir[d] = 0;
         }
+
         for (int a = 1; a < cell.size(); a++) {
             const int x = (a - 1) % cols;
             const int y = (a - 1) / cols;
@@ -100,7 +109,6 @@ struct Level {
             }
         }
     }
-    Level(const vector<string>& lines, bool emoji = false);
 
     bool Increment();
     void Prepare();
@@ -442,7 +450,7 @@ struct hash<State> {
 }  // namespace std
 
 struct Solver {
-    bool IsSolveable(Level& level);
+    bool IsSolveable(Level& level, bool cache = true);
 
     flat_hash_set<State> visited;
     vector<vector<State>> remaining;
@@ -473,10 +481,13 @@ void CopyBoxes(const Boxes& boxes, Level* out) {
     for (int i = 1; i < out->cell.size(); i++) out->cell[i].box = boxes[i];
 }
 
-bool Solver::IsSolveable(Level& level) {
-    ulong canonical_icode = Canonical(level);
-    if (solveable.contains(canonical_icode)) return true;
-    if (unsolveable.contains(canonical_icode)) return false;
+bool Solver::IsSolveable(Level& level, bool cache) {
+    ulong canonical_icode;
+    if (cache) {
+        canonical_icode = Canonical(level);
+        if (solveable.contains(canonical_icode)) return true;
+        if (unsolveable.contains(canonical_icode)) return false;
+    }
 
     level.Prepare();
     State start{level.GetBoxes(), 0};
@@ -524,17 +535,19 @@ bool Solver::IsSolveable(Level& level) {
 
     if (minimal == 0) {
         //print("solved!\n");
-        solveable.insert(canonical_icode);
+        if (cache) solveable.insert(canonical_icode);
         return true;
     }
 
     //print("no solution!\n");
-    unsolveable.insert(canonical_icode);
-    CopyWalls(level, &tmp);
-    for (const State& s : visited) {
-        if (s.agent == 0) {
-            CopyBoxes(s.boxes, &tmp);
-            unsolveable.insert(Canonical(tmp));
+    if (cache) {
+        unsolveable.insert(canonical_icode);
+        CopyWalls(level, &tmp);
+        for (const State& s : visited) {
+            if (s.agent == 0) {
+                CopyBoxes(s.boxes, &tmp);
+                unsolveable.insert(Canonical(tmp));
+            }
         }
     }
     return false;
@@ -923,34 +936,262 @@ void FindAll(int rows, int cols) {
     print(", elapsed {}\n", start_ts.elapsed_s() / 60);
 }
 
-// Solving 5x5:
-// - all 32 cores on carbide
-//   - for ever outer pattern schedule a task in thread pool
-// - backtracking: outside then inside
-//   - only add box/wall to space (never remove)
-//   - only add box/wall if current level is solveable
-// - checking smaller patterns
+using EPattern = vector<char>;
+using EPatterns = vector<EPattern>;
 
-// level can either be:
-// - solveable
-// - minimal deadlock
-// - non-minimal deadlock -> contains smaller patttern
+bool Matches(const EPattern& pattern, const vector<char>& code) {
+    for (int i = 0; i < pattern.size(); i++) {
+        if (pattern[i] > code[i]) return false;
+    }
+    return true;
+}
+
+bool ContainsExistingPattern(const EPatterns& patterns, const vector<char>& code) {
+    for (const EPattern& p : patterns) {
+        if (Matches(p, code)) return true;
+    }
+    return false;
+}
+
+struct XPattern {
+    int rows, cols;
+    EPatterns patterns;
+};
+
+using XPatterns = vector<XPattern>;
+
+struct each_pair : public each<each_pair> {
+        int ma, mb;
+        int a = 0, b = -1;
+
+        each_pair(int ma, int mb) : ma(std::max<int>(0, ma)), mb(std::max<int>(0, mb)) {}
+
+        std::optional<pair<int, int>> next() {
+            b += 1;
+            if (b == mb) {
+                b = 0;
+                a += 1;
+                if (a == ma) return std::nullopt;
+            }
+            return pair{a, b};
+        }
+};
+
+bool ContainsExistingPatternCrop(const XPattern& xp, int rows, int cols, const vector<char>& code, vector<char>& crop) {
+    crop.resize(xp.rows * xp.cols);
+    for (auto [c, r] : each_pair(cols - xp.cols + 1, rows - xp.rows + 1)) {
+        // crop [code] to [crop]
+        for (auto [ec, er] : each_pair(xp.cols, xp.rows)) {
+            crop[er * xp.cols + ec] = code[(r + er) * cols + c + ec];
+        }
+
+        if (ContainsExistingPattern(xp.patterns, crop)) return true;
+    }
+    return false;
+}
+
+bool ContainsExistingPattern(const XPatterns& xpatterns, int rows, int cols, const vector<char>& code, vector<char>& crop, vector<char>& transposed) {
+    transposed.clear();
+    for (const XPattern& xp : xpatterns) {
+        if (rows == xp.rows && cols == xp.cols) {
+            if (ContainsExistingPattern(xp.patterns, code)) return true;
+            continue;
+        }
+
+        if (rows >= xp.rows && cols >= xp.cols) {
+            if (ContainsExistingPatternCrop(xp, rows, cols, code, crop)) return true;
+        }
+
+        if (xp.rows != xp.cols && rows >= xp.cols && cols >= xp.rows) {
+            if (transposed.size() != rows * cols) {
+                transposed.resize(rows * cols);
+                for (auto [r, c] : each_pair(rows, cols)) transposed[c * rows + r] = code[r * cols + c];
+            }
+            if (ContainsExistingPatternCrop(xp, cols, rows, transposed, crop)) return true;
+        }
+    }
+    return false;
+}
+
+XPattern& Get(XPatterns& xpatterns, int rows, int cols) {
+    for (auto it = xpatterns.rbegin(); it != xpatterns.rend(); it++) {
+        if (it->rows == rows && it->cols == cols) return *it;
+    }
+    xpatterns.emplace_back(XPattern{rows, cols, {}});
+    return xpatterns.back();
+}
+
+void AddPattern(XPatterns& xpatterns, int rows, int cols, const vector<char>& code) {
+    XPattern& xp = Get(xpatterns, rows, cols);
+    xp.patterns.push_back(code);
+
+    // Add all transformations of code!
+    const size_t num_patterns = xp.patterns.size();
+    const int num_transforms = (rows == cols) ? 8 : 4;
+    for (int i = 1; i < num_transforms; i++) {
+        vector<char> cc;
+        cc.resize(code.size());
+        for (auto [r, c] : each_pair(rows, cols)) {
+            int mr = r, mc = c;
+            if (i & 1) mc = cols - 1 - mc;
+            if (i & 2) mr = rows - 1 - mr;
+            if (i & 4) std::swap(mr, mc);
+            cc[r * cols + c] = code[mr * cols + mc];
+        }
+
+        bool symmetric = false;
+        for (size_t j = num_patterns; j < xp.patterns.size(); j++) {
+            if (cc == xp.patterns[j]) {
+                symmetric = true;
+                break;
+            }
+        }
+        if (!symmetric) {
+            xp.patterns.emplace_back(std::move(cc));
+        }
+    }
+}
+
+template<int transform>
+ulong Encode(const vector<char>& code, const int rows, const int cols) {
+    ulong a = 0;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            a *= 3;
+            if (transform == 0) a += code[r * cols + c];
+            if (transform == 1) a += code[r * cols + (cols - 1 - c)];
+            if (transform == 2) a += code[(rows - 1 - r) * cols + c];
+            if (transform == 3) a += code[(rows - 1 - r) * cols + (cols - 1 - c)];
+            if (transform == 4) a += code[c * cols + r];
+            if (transform == 5) a += code[(cols - 1 - c) * cols + r];
+            if (transform == 6) a += code[c * cols + (rows - 1 - r)];
+            if (transform == 7) a += code[(cols - 1 - c) * cols + (rows - 1 - r)];
+        }
+    }
+    return a;
+}
+
+bool IsCanonical(const vector<char>& code, const int rows, const int cols) {
+    ulong a = Encode<0>(code, rows, cols);
+    if (a > Encode<1>(code, rows, cols)) return false;
+    if (a > Encode<2>(code, rows, cols)) return false;
+    if (a > Encode<3>(code, rows, cols)) return false;
+    if (rows != cols) return true;
+    if (a > Encode<4>(code, rows, cols)) return false;
+    if (a > Encode<5>(code, rows, cols)) return false;
+    if (a > Encode<6>(code, rows, cols)) return false;
+    if (a > Encode<7>(code, rows, cols)) return false;
+    return true;
+}
+
+struct Permutations {
+    int rows, cols;
+    vector<char> code;
+    XPatterns xpatterns;
+    Solver solver;
+    Level level;
+    vector<char> crop, transposed;
+    std::ofstream of;
+
+    int Find(int boxes, int walls);
+    int Find(int pieces);
+
+    void Run(int rows, int cols);
+};
+
+int Permutations::Find(int boxes, int walls) {
+    int w = 0;
+    const int spaces = rows * cols - boxes - walls;
+    for (int i = 0; i < spaces; i++) code[w++] = 0;
+    for (int i = 0; i < boxes; i++) code[w++] = 1;
+    for (int i = 0; i < walls; i++) code[w++] = 2;
+
+    int count = 0;
+    do {
+        // Convert code to level
+        for (int i = 1; i < level.cell.size(); i++) {
+            char c = code[i - 1];
+            level.cell[i].box = c == 1;
+            level.cell[i].wall = c == 2;
+        }
+
+        if (walls >= 3 && HasWallCorner(level)) continue;
+        if (HasFreeCornerBox(level)) continue;
+        if (walls >= 4 && HasWallTetris(level)) continue;
+        if (HasEmptyRowX(level) || HasEmptyColX(level)) continue;
+        if (Has2x2Deadlock(level)) continue;
+
+        if (!IsCanonical(code, rows, cols)) continue;
+        if (HasFreeBox(level)) continue;
+
+        if (ContainsExistingPattern(xpatterns, rows, cols, code, crop, transposed)) continue;
+        if (solver.IsSolveable(level, /*cache*/false)) continue;
+
+        AddPattern(xpatterns, rows, cols, code);
+        level.Print();
+        level.Print(of);
+        count += 1;
+    } while (std::next_permutation(code.begin(), code.end()));
+    return count;
+}
+
+int Permutations::Find(const int pieces) {
+    int count = 0;
+    for (int boxes = pieces; boxes >= 1; boxes--) {
+        if (rows * cols >= 20) print("{} x {} with {} boxes {} walls\n", rows, cols, boxes, pieces - boxes);
+        count += Find(boxes, pieces - boxes);
+    }
+    return count;
+}
+
+void Permutations::Run(const int rows, const int cols) {
+    this->rows = rows;
+    this->cols = cols;
+    code.resize(rows * cols);
+    crop.reserve(rows * cols);
+    transposed.reserve(rows * cols);
+    level.Reset(rows, cols);
+    of = std::ofstream(format("{}/{}x{}", kPatternsPath, rows, cols));
+
+    print("{} x {}\n", rows, cols);
+
+    const int rh = std::max(1, (rows - 1) / 2);
+    const int ch = std::max(1, (cols - 1) / 2);
+    const int max_pieces = rows * cols - rh * ch;
+
+    Timestamp start;
+    int count = 0;
+    for (int pieces = 2; pieces <= max_pieces; pieces++) {
+        if (rows * cols >= 16) print("{} x {} with {} pieces\n", rows, cols, pieces);
+        count += Find(pieces);
+    }
+    print("{} x {} done! {} patterns, computed in {:.2f} min\n\n", rows, cols, count, start.elapsed_s() / 60);
+}
 
 int main(int argc, char* argv[]) {
     InitSegvHandler();
-
     std::filesystem::create_directories(kPatternsPath);
-    /*FindAll(2, 3);
-    FindAll(2, 4);
-    FindAll(3, 3);
-    FindAll(2, 5);
-    FindAll(3, 4);
-    FindAll(3, 5);
-    FindAll(4, 4);*/ // old 9s (including all above)
-    FindAll(3, 6);
-    //FindAll(4, 5); // 7m13s
-    //FindAll(3, 7);
-    //FindAll(3, 8);
-    //FindAll(5, 5);
+
+    Permutations p;
+    p.Run(2, 3); // 6
+    p.Run(2, 4); // 8
+    p.Run(3, 3); // 9
+    p.Run(2, 5); // 10
+    p.Run(2, 6); // 12
+    p.Run(3, 4); // 12
+    p.Run(2, 7); // 14
+    p.Run(3, 5); // 15
+    p.Run(2, 8); // 16
+    p.Run(4, 4); // 16 - 9s (all)
+    p.Run(2, 9); // 16
+    p.Run(3, 6); // 18 - 1m 4s (all)
+    p.Run(2, 10); // 20
+    p.Run(4, 5); // 20 - 7m 3s (all - except 2:10)
+    p.Run(3, 7); // 21
+    p.Run(2, 11); // 22
+    p.Run(2, 12); // 24
+    p.Run(3, 8); // 24
+    p.Run(4, 6); // 24
+    p.Run(5, 5); // 25
     return 0;
 }
