@@ -33,7 +33,7 @@ inline size_t hash(const std::vector<char>& a) {
 struct DynamicBoxes {
     bool operator[](const Cell* a) const { return operator[](a->id); }
     void add(const Cell* a) { set(a->id); }
-    void remove(const Cell* a) { set(a->id); }
+    void remove(const Cell* a) { reset(a->id); }
     void move(const Cell* a, const Cell* b) { remove(a); add(b); }
 
     void add(uint index) { set(index); }
@@ -62,7 +62,7 @@ template <int Words>
 struct DenseBoxes {
     bool operator[](const Cell* a) const { return operator[](a->id); }
     void add(const Cell* a) { set(a->id); }
-    void remove(const Cell* a) { set(a->id); }
+    void remove(const Cell* a) { reset(a->id); }
     void move(const Cell* a, const Cell* b) { remove(a); add(b); }
 
     void add(uint index) { set(index); }

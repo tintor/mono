@@ -1,8 +1,7 @@
 #pragma once
+#include "sokoban/pair_visitor.h"
 #include "sokoban/cell.h"
 #include "sokoban/state.h"
-#include <shared_mutex>
-using std::vector;
 
 template <typename Boxes>
 inline bool free(const Cell* a, const Boxes& boxes) {
@@ -156,10 +155,18 @@ void normalize(const Level* level, State& s) {
     }
 }
 
-template <typename State, typename Push>
-void for_each_push(const Level* level, const State& s, const Push& push) {
-    AgentVisitor visitor(level);
-    visitor.add(s.agent);
+template <typename Boxes>
+const Cell* normalize2(const Cell* agent, const Boxes& boxes) {
+    TState<Boxes> s;
+    s.agent = agent->id;
+    s.boxes = boxes;
+    normalize(agent->level, s);
+    return agent->level->cells[s.agent];
+}
+
+template <typename State, typename PushFn>
+void for_each_push(const Level* level, const State& s, const PushFn& push) {
+    AgentVisitor visitor(level, s.agent);
     for (const Cell* a : visitor) {
         for (auto [d, b] : a->actions) {
             if (!s.boxes[b->id]) {
@@ -167,7 +174,60 @@ void for_each_push(const Level* level, const State& s, const Push& push) {
                 continue;
             }
             const Cell* c = b->dir(d);
+            // TODO remove c->sink
             if (c && (c->alive || c->sink) && !s.boxes[c->id]) push(a, b, d);
         }
     }
+}
+
+using Continue = Symbol<symbol_hash("continue")>;
+using Break = Symbol<symbol_hash("break")>;
+using Deadlock = Symbol<symbol_hash("deadlock")>;
+
+// Can push the same box multiple times!
+template <typename Boxes, typename Out>
+variant<Continue, Break> for_each_multi_push(const Level* level, const Cell* agent, Boxes boxes, const Cell* dont_select_box, const Out& out) {
+    AgentVisitor reachable(agent);
+    for (const Cell* a : reachable) {
+        for (auto [_, b] : a->moves) {
+            if (!boxes[b->id]) reachable.add(b);
+        }
+    }
+
+    AgentBoxVisitor visitor(level);
+    for (const Cell* sb : level->alive()) {
+        if (!boxes[sb] || sb == dont_select_box) continue;
+
+        boxes.remove(sb);
+        visitor.clear();
+        for (auto [d, a] : sb->moves) {
+            if (reachable.visited(a)) {
+                const Cell* c = sb->dir(d ^ 2);
+                if (c && c->alive) {
+                    boxes.add(c);
+                    visitor.add(normalize2(sb, boxes), c);
+                    boxes.remove(c);
+                }
+            }
+        }
+
+        for (const auto [v_agent, v_box] : visitor) {
+            variant<Continue, Break, Deadlock> result = out(sb, v_agent, v_box);
+            if (result == Break()) return Break();
+            if (result == Deadlock()) continue;
+
+            const auto v_box_ = v_box;
+            boxes.add(v_box);
+            for_each_push(level, TState(v_agent->id, boxes), [&](const Cell* a, const Cell* b, int d) {
+                if (b != v_box_) return;
+                const Cell* c = b->dir(d);
+                boxes.move(b, c);
+                visitor.add(normalize2(b, boxes), c);
+                boxes.move(c, b);
+            });
+            boxes.remove(v_box);
+        }
+        boxes.add(sb);
+    }
+    return Continue();
 }

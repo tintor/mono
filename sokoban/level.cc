@@ -196,7 +196,7 @@ struct Minimal {
     }
 
     // note: start can be alive cell!
-    vector<Cell*> dead_region(const vector<Cell*>& cells, Cell* start) const {
+    static vector<Cell*> dead_region(const vector<Cell*>& cells, Cell* start) {
         small_bfs<Cell*> visitor(cells.size());
         visitor.add(start, start->id);
 
@@ -269,7 +269,7 @@ struct Minimal {
                 for (int d = 0; d < 4; d++) {
                     Cell* b = a->_dir[d];
                     if (b && (b->alive || b->sink) && b != c) {
-                        c->actions.emplace_back(d, a->_dir[d]);
+                        c->actions.emplace_back(d, b);
                     }
                 }
             }
@@ -280,8 +280,8 @@ struct Minimal {
             for (Cell* a : dead_region(cells, c)) {
                 for (int d = 0; d < 4; d++) {
                     Cell* b = a->_dir[d];
-                    if (b && (b->alive || b->sink) && a->_dir[d] != c) {
-                        c->new_moves.emplace_back(a->_dir[d]);
+                    if (b && (b->alive || b->sink) && b != c) {
+                        c->new_moves.emplace_back(b);
                     }
                 }
             }
@@ -428,11 +428,11 @@ const Level* LoadLevel(const LevelEnv& env, bool extra) {
         ComputeGoalPenalties(level);
     }
 
-    /*string label;
-    Print(level, level->start, [&label](auto e) {
-        if (e->goal_penalty > 99) label = "??"; else label = format("{}", e->goal_penalty);
-        if (label.size() == 1) label = " " + label;
-        return label;
+    /*auto q = Minimal::dead_region(level->cells, level->cells[level->start.agent]);
+    string label;
+    Print(level, level->start, [&q](auto e) {
+        if (contains(q, e)) return "??";
+        return "";
     });*/
     return level;
 }
