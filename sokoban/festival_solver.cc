@@ -1,12 +1,11 @@
-#include "core/array_deque.h"
 #include "core/auto.h"
 #include "core/bits_util.h"
 #include "core/range.h"
 #include "core/small_bfs.h"
 #include "core/string.h"
-#include "core/thread.h"
 #include "core/timestamp.h"
 
+#include "sokoban/common.h"
 #include "sokoban/solver.h"
 #include "sokoban/corrals.h"
 #include "sokoban/frozen.h"
@@ -18,13 +17,6 @@
 #include "absl/container/flat_hash_map.h"
 
 using namespace std::chrono_literals;
-using std::nullopt;
-using std::vector;
-using std::array;
-using std::pair;
-using std::map;
-using std::optional;
-using absl::flat_hash_map;
 
 template <typename T>
 using min_priority_queue = std::priority_queue<T, std::vector<T>, std::greater<T>>;
@@ -163,8 +155,7 @@ struct FestivalSolver {
                     if (corrals.has_picorral() && !corrals.picorral()[c->id]) return;
 
                     State ns(b->id, s.boxes);
-                    ns.boxes.reset(b->id);
-                    ns.boxes.set(c->id);
+                    ns.boxes.move(b, c);
                     normalize(level, ns);
 
                     if (closed_states.contains(ns)) return;
