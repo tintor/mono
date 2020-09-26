@@ -1,32 +1,54 @@
 #pragma once
-#include "core/array_deque.h"
 #include "core/matrix.h"
+#include "sokoban/common.h"
 
 class PairVisitor : public each<PairVisitor> {
    public:
     PairVisitor(ushort size1, ushort size2) { visited.resize(size1, size2); }
 
-    bool try_add(ushort a, ushort b) {
+    bool add(ushort a, ushort b) {
         if (visited(a, b)) return false;
         visited(a, b) = true;
         deque.push_back({a, b});
         return true;
     }
 
-    void reset() {
+    void clear() {
         deque.clear();
         visited.fill(false);
     }
 
-    std::optional<std::pair<ushort, ushort>> next() {
-        if (deque.empty()) return std::nullopt;
+    optional<pair<ushort, ushort>> next() {
+        if (deque.empty()) return nullopt;
         ON_SCOPE_EXIT(deque.pop_front());
         return deque.front();
     }
 
    private:
-    mt::array_deque<std::pair<ushort, ushort>> deque;
+    array_deque<pair<ushort, ushort>> deque;
     matrix<char> visited;
+};
+
+struct AgentBoxVisitor : public each<AgentBoxVisitor> {
+    AgentBoxVisitor(const Level* level) : _level(level), _visitor(level->cells.size(), level->num_alive) {}
+
+    bool add(const Cell* a, const Cell* b) {
+        return _visitor.add(a->id, b->id);
+    }
+
+    void clear() {
+        _visitor.clear();
+    }
+
+    optional<pair<const Cell*, const Cell*>> next() {
+        auto n = _visitor.next();
+        if (!n) return nullopt;
+        return pair(_level->cells[n->first], _level->cells[n->second]);
+    }
+
+private:
+    const Level* _level;
+    PairVisitor _visitor;
 };
 
 // Queue API:
@@ -60,8 +82,8 @@ public:
         return false;
     }
 
-    std::optional<Node> next() {
-        if (_remaining.empty()) return std::nullopt;
+    optional<Node> next() {
+        if (_remaining.empty()) return nullopt;
 
         ON_SCOPE_EXIT(_remaining.pop_front());
         return _remaining.top();

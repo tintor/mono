@@ -331,11 +331,11 @@ void ComputePushDistances(Level* level) {
 
     for (Cell* g : level->goals()) {
         auto goal = g->id;
-        visitor.reset();
+        visitor.clear();
         distance.fill(Cell::Inf);
         // Uses "moves" as this is reverse search
         for (auto [_, e] : g->moves)
-            if (visitor.try_add(e->id, goal)) distance(e->id, goal) = 0;
+            if (visitor.add(e->id, goal)) distance(e->id, goal) = 0;
         g->push_distance[goal] = 0;
 
         for (auto [agent, box] : visitor) {
@@ -345,9 +345,9 @@ void ComputePushDistances(Level* level) {
             // Uses "moves" as this is reverse search
             for (auto [d, n] : a->moves) {
                 uint next = n->id;
-                if (next != box && visitor.try_add(next, box))
+                if (next != box && visitor.add(next, box))
                     distance(next, box) = distance(agent, box);  // no move cost
-                if (a->alive && a->dir(d ^ 2) && a->dir(d ^ 2)->id == box && visitor.try_add(next, agent))
+                if (a->alive && a->dir(d ^ 2) && a->dir(d ^ 2)->id == box && visitor.add(next, agent))
                     distance(next, agent) = distance(agent, box) + 1;  // push cost
             }
         }

@@ -42,10 +42,10 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
     for (Cell* g : level->goals()) {
         if (frozen[g->id]) continue;
 
-        visitor.reset();
+        visitor.clear();
         // Uses "moves" as this is reverse search
         for (auto [_, e] : g->moves)
-            if (!frozen[e->id]) visitor.try_add(e->id, g->id);
+            if (!frozen[e->id]) visitor.add(e->id, g->id);
 
         bool goal_reachable = false;
         for (auto [a_id, b_id] : visitor) {
@@ -60,8 +60,8 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
             // Uses "moves" as this is reverse search
             for (auto [d, n] : a->moves) {
                 if (frozen[n->id]) continue;
-                if (n != b) visitor.try_add(n->id, b->id); // move
-                if (a->dir(d ^ 2) && a->dir(d ^ 2) == b) visitor.try_add(n->id, a->id); // pull
+                if (n != b) visitor.add(n->id, b->id); // move
+                if (a->dir(d ^ 2) && a->dir(d ^ 2) == b) visitor.add(n->id, a->id); // pull
             }
         }
 
