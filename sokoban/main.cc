@@ -87,7 +87,7 @@ string Solve(string_view file, const Options& options) {
             completed += 1;
             print("{}: solved in {} steps / {} pushes!\n", name, solution.first.size(), solution.second);
             mark_level_solved(name);
-            if (options.animate) {
+            if (options.animate && !options.fest) {
                 env.Print();
                 std::this_thread::sleep_for(100ms);
                 env.Unprint();
