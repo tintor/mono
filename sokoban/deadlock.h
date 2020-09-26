@@ -37,7 +37,7 @@ bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, co
 template <typename Boxes>
 bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen) {
     const Level* level = agent->level;
-    PairVisitor visitor(level->cells.size(), level->num_alive);
+    AgentBoxVisitor visitor(level);
 
     for (Cell* g : level->goals()) {
         if (frozen[g->id]) continue;
@@ -45,23 +45,20 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
         visitor.clear();
         // Uses "moves" as this is reverse search
         for (auto [_, e] : g->moves)
-            if (!frozen[e->id]) visitor.add(e->id, g->id);
+            if (!frozen[e->id]) visitor.add(e, g);
 
         bool goal_reachable = false;
-        for (auto [a_id, b_id] : visitor) {
-            if (a_id == agent->id && non_frozen[b_id]) {
+        for (auto [a, b] : visitor) {
+            if (a == agent && non_frozen[b->id]) {
                 goal_reachable = true;
                 break;
             }
 
-            const Cell* a = level->cells[a_id];
-            const Cell* b = level->cells[b_id];
-
             // Uses "moves" as this is reverse search
             for (auto [d, n] : a->moves) {
                 if (frozen[n->id]) continue;
-                if (n != b) visitor.add(n->id, b->id); // move
-                if (a->dir(d ^ 2) && a->dir(d ^ 2) == b) visitor.add(n->id, a->id); // pull
+                if (n != b) visitor.add(n, b); // move
+                if (a->dir(d ^ 2) && a->dir(d ^ 2) == b) visitor.add(n, a); // pull
             }
         }
 
