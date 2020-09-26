@@ -9,10 +9,6 @@
 #include "sokoban/level_env.h"
 #include "sokoban/pair_visitor.h"
 
-using std::string_view;
-using std::string;
-using std::vector;
-
 namespace Code {
 constexpr char Wall = '#';
 constexpr char Goal = '.';
@@ -327,28 +323,25 @@ void ComputePushDistances(Level* level) {
 
     matrix<uint> distance;
     distance.resize(level->cells.size(), level->num_alive);
-    PairVisitor visitor(level->cells.size(), level->num_alive);
+    AgentBoxVisitor visitor(level);
 
     for (Cell* g : level->goals()) {
-        auto goal = g->id;
         visitor.clear();
         distance.fill(Cell::Inf);
         // Uses "moves" as this is reverse search
         for (auto [_, e] : g->moves)
-            if (visitor.add(e->id, goal)) distance(e->id, goal) = 0;
-        g->push_distance[goal] = 0;
+            if (visitor.add(e, g)) distance(e->id, g->id) = 0;
+        g->push_distance[g->id] = 0;
 
-        for (auto [agent, box] : visitor) {
-            Cell* a = level->cells[agent];
-            minimize(level->cells[box]->push_distance[goal], distance(agent, box));
+        for (auto [a, b] : visitor) {
+            minimize(level->cells[b->id]->push_distance[g->id], distance(a->id, b->id));
 
             // Uses "moves" as this is reverse search
             for (auto [d, n] : a->moves) {
-                uint next = n->id;
-                if (next != box && visitor.add(next, box))
-                    distance(next, box) = distance(agent, box);  // no move cost
-                if (a->alive && a->dir(d ^ 2) && a->dir(d ^ 2)->id == box && visitor.add(next, agent))
-                    distance(next, agent) = distance(agent, box) + 1;  // push cost
+                if (n != b && visitor.add(n, b))
+                    distance(n->id, b->id) = distance(a->id, b->id);  // no move cost
+                if (a->alive && a->dir(d ^ 2) && a->dir(d ^ 2) == b && visitor.add(n, a))
+                    distance(n->id, a->id) = distance(a->id, b->id) + 1;  // push cost
             }
         }
     }
