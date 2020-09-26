@@ -4,6 +4,7 @@
 #include "core/exception.h"
 #include "core/murmur3.h"
 #include "core/fmt.h"
+#include "sokoban/cell.h"
 
 using Agent = uint;
 
@@ -30,6 +31,14 @@ inline size_t hash(const std::vector<char>& a) {
 }
 
 struct DynamicBoxes {
+    bool operator[](const Cell* a) const { return operator[](a->id); }
+    void add(const Cell* a) { set(a->id); }
+    void remove(const Cell* a) { set(a->id); }
+    void move(const Cell* a, const Cell* b) { remove(a); add(b); }
+
+    void add(uint index) { set(index); }
+    void remove(uint index) { reset(index); }
+
     bool operator[](uint index) const { return index < data.size() && data[index]; }
     void set(uint index) { if (index >= data.size()) data.resize(index + 1); data[index] = 1; }
     void reset(uint index) { if (index < data.size()) data[index] = 0; }
@@ -51,6 +60,14 @@ struct DynamicBoxes {
 
 template <int Words>
 struct DenseBoxes {
+    bool operator[](const Cell* a) const { return operator[](a->id); }
+    void add(const Cell* a) { set(a->id); }
+    void remove(const Cell* a) { set(a->id); }
+    void move(const Cell* a, const Cell* b) { remove(a); add(b); }
+
+    void add(uint index) { set(index); }
+    void remove(uint index) { reset(index); }
+
     operator DynamicBoxes() {
         DynamicBoxes out;
         for (uint i = 0; i < data.size(); i++)
