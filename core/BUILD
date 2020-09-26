@@ -3,6 +3,8 @@ load("//:library.bzl", "library")
 
 cc_library(name = "fmt", hdrs = ["fmt.h"], deps = ["@fmt"])
 
+cc_library(name = "symbol", hdrs = ["symbol.h"])
+
 library(name = "auto")
 library(name = "numeric", deps = [":auto"])
 
