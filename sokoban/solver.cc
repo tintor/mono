@@ -20,20 +20,6 @@
 
 #include <queue>
 
-#include "absl/container/flat_hash_set.h"
-
-using namespace std::chrono_literals;
-using std::nullopt;
-using std::vector;
-using std::array;
-using std::lock_guard;
-using std::mutex;
-using std::thread;
-using std::pair;
-using std::optional;
-using absl::flat_hash_map;
-using absl::flat_hash_set;
-
 template <typename T>
 void ensure_size(vector<T>& vec, size_t s) {
     if (s > vec.size()) vec.resize(round_up_power2(s));

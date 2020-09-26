@@ -2,6 +2,7 @@
 #include "core/numeric.h"
 #include <atomic>
 #include <condition_variable>
+#include <shared_mutex>
 #include <mutex>
 #include <thread>
 #include <vector>
