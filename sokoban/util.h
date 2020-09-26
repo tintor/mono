@@ -145,23 +145,20 @@ bool is_cell_reachable(const Cell* c, const Cell* agent, const Boxes& boxes) {
     return false;
 }
 
-template <typename State>
-void normalize(const Level* level, State& s) {
-    AgentVisitor visitor(level, s.agent);
+template <typename Boxes>
+const Cell* normalize(const Cell* agent, const Boxes& boxes) {
+    AgentVisitor visitor(agent);
     for (const Cell* a : visitor) {
-        if (a->id < s.agent) s.agent = a->id;
+        if (a->id < agent->id) agent = a;
         for (auto [_, b] : a->moves)
-            if (!s.boxes[b->id]) visitor.add(b);
+            if (!boxes[b->id]) visitor.add(b);
     }
+    return agent;
 }
 
-template <typename Boxes>
-const Cell* normalize2(const Cell* agent, const Boxes& boxes) {
-    TState<Boxes> s;
-    s.agent = agent->id;
-    s.boxes = boxes;
-    normalize(agent->level, s);
-    return agent->level->cells[s.agent];
+template <typename State>
+void normalize(const Level* level, State& s) {
+    s.agent = normalize(level->cells[s.agent], s.boxes)->id;
 }
 
 template <typename State, typename PushFn>
@@ -205,7 +202,7 @@ variant<Continue, Break> for_each_multi_push(const Level* level, const Cell* age
                 const Cell* c = sb->dir(d ^ 2);
                 if (c && c->alive) {
                     boxes.add(c);
-                    visitor.add(normalize2(sb, boxes), c);
+                    visitor.add(normalize(sb, boxes), c);
                     boxes.remove(c);
                 }
             }
@@ -222,7 +219,7 @@ variant<Continue, Break> for_each_multi_push(const Level* level, const Cell* age
                 if (b != v_box_) return;
                 const Cell* c = b->dir(d);
                 boxes.move(b, c);
-                visitor.add(normalize2(b, boxes), c);
+                visitor.add(normalize(b, boxes), c);
                 boxes.move(c, b);
             });
             boxes.remove(v_box);
