@@ -227,7 +227,7 @@ struct FestivalSolver {
 
             for (auto it = fs_queues.begin(); it != fs_queues.end();) {
                 auto& queue = it->second;
-                if (queue.empty()) { it = fs_queues.erase(it); continue; }
+                if (queue.empty()) { it = TIMER(fs_queues.erase(it), counters.queue_pop_ticks); continue; }
 
                 Queued queued = queue.top();
                 TIMER(queue.pop(), counters.queue_pop_ticks);
@@ -247,10 +247,10 @@ struct FestivalSolver {
                     Print(level, s.agent, s.boxes);
                 }
 
-                corrals.find_unsolved_picorral(s);
+                TIMER(corrals.find_unsolved_picorral(s), counters.corral_ticks);
                 for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
                     const Cell* c = b->dir(d);
-                    if (corrals.has_picorral() && !corrals.picorral()[c->id]) { counters.corral_cuts += 1; return; }
+                    if (TIMER(corrals.has_picorral() && !corrals.picorral()[c->id], counters.corral2_ticks)) { counters.corral_cuts += 1; return; }
 
                     State ns(b->id, s.boxes);
                     ns.boxes.move(b, c);

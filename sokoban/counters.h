@@ -32,6 +32,7 @@ struct Counters {
     T queue_push_ticks = 0;
     T features_ticks = 0;
     T pattern_add_ticks = 0;
+    T contains_box_blocked_goals_ticks = 0;
 
     T total_ticks = 0;
 
@@ -54,6 +55,7 @@ struct Counters {
         a -= queue_push_ticks;
         a -= features_ticks;
         a -= pattern_add_ticks;
+        a -= contains_box_blocked_goals_ticks;
         return a;
     }
 
@@ -81,6 +83,7 @@ struct Counters {
         tick("queue_push", queue_push_ticks, &first);
         tick("features", features_ticks, &first);
         tick("pattern_add", pattern_add_ticks, &first);
+        tick("contains_box_blocked_goals", contains_box_blocked_goals_ticks, &first);
         tick("else", else_ticks(), &first);
 
         ::print("\ndeadlocks (simple {}, db {}, frozen_box {}, bipartite {}, heuristic {})", simple_deadlocks, db_deadlocks, frozen_box_deadlocks, bipartite_deadlocks, heuristic_deadlocks);

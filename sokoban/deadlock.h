@@ -30,17 +30,16 @@ bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, co
 }
 
 template <typename Boxes>
-bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen) {
+bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen, AgentBoxVisitor& visitor) {
     const Level* level = agent->level;
-    AgentBoxVisitor visitor(level);
-
     for (Cell* g : level->goals()) {
         if (frozen[g->id]) continue;
 
         visitor.clear();
         // Uses "moves" as this is reverse search
-        for (auto [_, e] : g->moves)
+        for (auto [_, e] : g->moves) {
             if (!frozen[e->id]) visitor.add(e, g);
+        }
 
         bool goal_reachable = false;
         for (auto [a, b] : visitor) {
@@ -59,7 +58,6 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
 
         if (!goal_reachable) return true;
     }
-
     return false;
 }
 
@@ -206,7 +204,7 @@ class DeadlockDB {
     constexpr static int WordBits = sizeof(Word) * 8;
 
 public:
-    DeadlockDB(const Level* level) : _level(level), _patterns(level) {
+    DeadlockDB(const Level* level) : _level(level), _agent_box_visitor(level), _patterns(level) {
 
     }
 
@@ -232,8 +230,10 @@ public:
         int num_boxes = _level->goals().size(); // TODO assumption!
 
         auto pm = q.pattern_matches_ticks;
+        auto cbbg = q.contains_box_blocked_goals_ticks;
         auto p = TIMER(contains_frozen_boxes(_level->cells[agent], boxes, boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
         q.contains_frozen_boxes_ticks -= q.pattern_matches_ticks - pm;
+        q.contains_frozen_boxes_ticks -= q.contains_box_blocked_goals_ticks - cbbg;
 
         Result result = p.first;
         if (result == Result::Frozen) {
@@ -404,12 +404,13 @@ private:
 
         if (!solved(agent->level, boxes)) return {Result::Frozen, 5};
         if (!all_empty_goals_are_reachable(_level, visitor, boxes)) return {Result::BlockedGoal, 6};
-        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) return {Result::PushBlockedGoal, 7};
+        if (TIMER(contains_box_blocked_goals(agent, orig_boxes, boxes, _agent_box_visitor), q.contains_box_blocked_goals_ticks)) return {Result::PushBlockedGoal, 7};
         return {Result::NotFrozen, 8};
     }
 
 private:
     const Level* _level;
+    AgentBoxVisitor _agent_box_visitor;
     mutex _add_mutex;
     Patterns _patterns;
 };
