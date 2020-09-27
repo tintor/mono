@@ -1,7 +1,6 @@
 #pragma once
-#include "sokoban/pair_visitor.h"
-#include "sokoban/cell.h"
-#include "sokoban/state.h"
+#include "sokoban/agent_visitor.h"
+#include "sokoban/agent_box_visitor.h"
 
 template <typename Boxes>
 inline bool free(const Cell* a, const Boxes& boxes) {

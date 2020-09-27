@@ -1,12 +1,7 @@
 #include "sokoban/solver.h"
 #include "sokoban/festival_solver.h"
-#include "sokoban/level_env.h"
-
-#include "core/fmt.h"
-#include "core/vector.h"
-#include "core/string.h"
-#include "core/thread.h"
-#include "core/timestamp.h"
+#include "sokoban/level_loader.h"
+#include "sokoban/level_printer.h"
 
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;

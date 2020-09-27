@@ -4,10 +4,9 @@
 #include "core/small_bfs.h"
 #include "core/string.h"
 
-#include "sokoban/level.h"
+#include "sokoban/level_loader.h"
 #include "sokoban/util.h"
 #include "sokoban/level_env.h"
-#include "sokoban/pair_visitor.h"
 
 namespace Code {
 constexpr char Wall = '#';
@@ -24,8 +23,8 @@ struct Minimal {
     int agent = 0;
     vector<bool> box;
     vector<char> cell;  // Space, Wall or Goal (and later Dead)
-    std::array<int, 4> dirs;
-    std::array<int, 8> dirs8;
+    array<int, 4> dirs;
+    array<int, 8> dirs8;
     int cell_count = 0;
     vector<int2> initial_steps;
 
@@ -162,11 +161,11 @@ struct Minimal {
     }
 
     uint find_dead_cells() {
-        small_bfs<std::pair<ushort, ushort>> visitor(cell.size() * cell.size());
+        small_bfs<pair<ushort, ushort>> visitor(cell.size() * cell.size());
         const auto add = [this, &visitor](uint agent, uint box) {
             check(agent);
             check(box);
-            visitor.add(std::pair<ushort, ushort>(agent, box), agent * cell.size() + box);
+            visitor.add(pair<ushort, ushort>(agent, box), agent * cell.size() + box);
         };
 
         vector<char> live(cell.size(), false);
@@ -259,7 +258,7 @@ struct Minimal {
             c->moves.resize(m);
             m = 0;
             for (int d = 0; d < 4; d++) {
-                if (c->dir(d)) c->moves[m++] = std::pair<int, Cell*>(d, c->dir(d));
+                if (c->dir(d)) c->moves[m++] = pair<int, Cell*>(d, c->dir(d));
             }
         }
 
@@ -298,7 +297,7 @@ struct Minimal {
             p = 0;
             for (int d = 0; d < 4; d++) {
                 if (c->dir(d) && (c->dir(d)->alive || c->dir(d)->sink) && c->dir(d ^ 2)) {
-                    c->pushes[p++] = std::pair<Cell*, Cell*>(c->dir(d), c->dir(d ^ 2));
+                    c->pushes[p++] = pair<Cell*, Cell*>(c->dir(d), c->dir(d ^ 2));
                 }
             }
         }
@@ -360,14 +359,14 @@ void ComputeGoalPenalties(Level* level) {
     vector<int> goal_max_dist(level->num_goals, 0);
     for (int i = 0; i < level->num_goals; i++) {
         for (Cell* a : level->alive()) {
-            if (a->push_distance[i] != Cell::Inf) goal_max_dist[i] = std::max(goal_max_dist[i], int(a->push_distance[i]));
+            if (a->push_distance[i] != Cell::Inf) goal_max_dist[i] = max(goal_max_dist[i], int(a->push_distance[i]));
         }
     }
 
     int next_penalty = 0;
     while (true) {
         int m = -1;
-        for (int i = 0; i < level->num_goals; i++) m = std::max(m, goal_max_dist[i]);
+        for (int i = 0; i < level->num_goals; i++) m = max(m, goal_max_dist[i]);
         if (m == -1) break;
 
         for (int i = 0; i < level->num_goals; i++) {
@@ -441,20 +440,4 @@ void Destroy(const Level* clevel) {
     Level* level = const_cast<Level*>(clevel);
     for (Cell* c : level->cells) delete c;
     delete level;
-}
-
-inline double Choose(uint a, uint b) {
-    double s = 1;
-    for (uint i = a; i > a - b; i--) s *= i;
-    for (uint i = 1; i <= b; i++) s /= i;
-    return s;
-}
-
-inline double Complexity(const Level* level) {
-    return log((level->num_alive - level->num_boxes) * Choose(level->num_alive, level->num_boxes));
-}
-
-void PrintInfo(const Level* level) {
-    print("alive {}, boxes {}, complexity {}\n", level->num_alive, level->num_boxes, (int)round(Complexity(level)));
-    Print(level, level->start);
 }

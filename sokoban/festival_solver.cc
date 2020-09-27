@@ -1,9 +1,6 @@
 #include "core/auto.h"
 #include "core/bits_util.h"
 #include "core/range.h"
-#include "core/small_bfs.h"
-#include "core/string.h"
-#include "core/timestamp.h"
 
 #include "sokoban/common.h"
 #include "sokoban/solver.h"
@@ -11,10 +8,8 @@
 #include "sokoban/frozen.h"
 #include "sokoban/deadlock.h"
 #include "sokoban/util.h"
-
-#include <queue>
-
-#include "absl/container/flat_hash_map.h"
+#include "sokoban/level_loader.h"
+#include "sokoban/level_printer.h"
 
 using namespace std::chrono_literals;
 

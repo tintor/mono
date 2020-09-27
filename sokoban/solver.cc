@@ -1,12 +1,8 @@
-#include "core/array_deque.h"
 #include "core/auto.h"
 #include "core/bits_util.h"
 #include "core/range.h"
-#include "core/small_bfs.h"
-#include "core/string.h"
-#include "core/thread.h"
-#include "core/timestamp.h"
 
+#include "sokoban/common.h"
 #include "sokoban/solver.h"
 #include "sokoban/corrals.h"
 #include "sokoban/frozen.h"
@@ -15,10 +11,10 @@
 #include "sokoban/util.h"
 #include "sokoban/heuristic.h"
 #include "sokoban/state_map.h"
+#include "sokoban/level_loader.h"
+#include "sokoban/level_printer.h"
 
 #include "ctpl.h"
-
-#include <queue>
 
 template <typename T>
 void ensure_size(vector<T>& vec, size_t s) {
@@ -45,17 +41,17 @@ class ConcurrentStateQueue {
         if (notify) queue_push_cv.notify_all();
     }
 
-    std::optional<State> top() const {
+    optional<State> top() const {
         Timestamp lock_ts;
-        std::unique_lock<mutex> lk(queue_lock);
+        unique_lock<mutex> lk(queue_lock);
         _pop_overhead += lock_ts.elapsed();
         if (block_if_empty(lk)) return nullopt;
         return queue[min_queue][0];
     }
 
-    std::optional<State> pop() {
+    optional<State> pop() {
         Timestamp lock_ts;
-        std::unique_lock<mutex> lk(queue_lock);
+        unique_lock<mutex> lk(queue_lock);
         _pop_overhead += lock_ts.elapsed();
         if (block_if_empty(lk)) return nullopt;
 
@@ -66,19 +62,19 @@ class ConcurrentStateQueue {
     }
 
     size_t size() const {
-        std::unique_lock<mutex> lk(queue_lock);
+        unique_lock<mutex> lk(queue_lock);
         return queue_size;
     }
 
     void shutdown() {
-        std::unique_lock<mutex> lk(queue_lock);
+        unique_lock<mutex> lk(queue_lock);
         running = false;
         queue_push_cv.notify_all();
     }
 
     template <class Rep, class Period>
     bool wait_while_running_for(const std::chrono::duration<Rep, Period>& rel_time) const {
-        std::unique_lock<mutex> lk(queue_lock);
+        unique_lock<mutex> lk(queue_lock);
         if (running) queue_push_cv.wait_for(lk, rel_time);
         return running;
     }
@@ -93,13 +89,13 @@ class ConcurrentStateQueue {
         queue.clear();
     }
 
-    std::string monitor() const {
-        std::unique_lock<mutex> lk(queue_lock);
+    string monitor() const {
+        unique_lock<mutex> lk(queue_lock);
         return format("push {:.3f}, pop {:.3f}", Timestamp::to_s(_push_overhead), Timestamp::to_s(_pop_overhead));
     }
 
    private:
-    bool block_if_empty(std::unique_lock<mutex>& lk) const {
+    bool block_if_empty(unique_lock<mutex>& lk) const {
         if (queue_size == 0) {
             blocked_on_queue += 1;
             while (queue_size == 0) {
@@ -124,44 +120,12 @@ class ConcurrentStateQueue {
     mutable long _push_overhead = 0;
     mutable long _pop_overhead = 0;
     mutable uint blocked_on_queue = 0;
-    mutable std::mutex queue_lock;
-    mutable std::condition_variable queue_push_cv;
+    mutable mutex queue_lock;
+    mutable condition_variable queue_push_cv;
 
     mutable uint min_queue = 0;
     uint queue_size = 0;
-    vector<mt::array_deque<State>> queue;
-};
-
-class XAgentVisitor : public each<XAgentVisitor> {
-private:
-    int pos = 0;
-    small_queue<const Exits*> queue;
-    std::vector<uchar> visited;  // avoid slower vector<bool> as it is bit compressed!
-
-public:
-    XAgentVisitor(uint capacity) : queue(capacity) { visited.resize(capacity, 0); }
-
-    void clear() {
-        queue.clear();
-        for (auto& e : visited) e = 0;
-    }
-
-    bool add(const Cell* a) {
-        if (visited[a->dead_region_id]) return false;
-        queue.push(&a->exits);
-        visited[a->dead_region_id] = 1;
-        return true;
-    }
-
-    std::optional<std::tuple<const Cell*, const Cell*, int>> next() {
-        if (!queue) return std::nullopt;
-        if (pos == queue.first()->size()) {
-            pos = 0;
-            queue.pop();
-            if (!queue) return std::nullopt;
-        }
-        return (*queue.first())[pos++];
-    }
+    vector<array_deque<State>> queue;
 };
 
 template <typename State>
@@ -300,45 +264,45 @@ public:
     }
 
     void push(State s, float priority) {
-        std::unique_lock lock(_push_mutex);
+        unique_lock lock(_push_mutex);
         _queue.push({std::move(s.boxes), s.agent, priority});
     }
 
     optional<State> top() const {
-        if (_queue.empty()) return std::nullopt;
+        if (_queue.empty()) return nullopt;
         return State(_queue.top().agent, std::move(_queue.top().boxes));
     }
 
     optional<State> pop() {
-        if (_queue.empty()) return std::nullopt;
+        if (_queue.empty()) return nullopt;
         ON_SCOPE_EXIT(_queue.pop());
         return State(_queue.top().agent, std::move(_queue.top().boxes));
     }
 
     size_t size() const { return _queue.size(); }
 
-    std::string monitor() const { return format(""); }
+    string monitor() const { return format(""); }
 
     void shutdown() {
-        std::unique_lock<mutex> lk(_running_lock);
+        unique_lock<mutex> lk(_running_lock);
         _running = true;
         _running_cv.notify_all();
     }
 
     template <class Rep, class Period>
     bool wait_while_running_for(const std::chrono::duration<Rep, Period>& rel_time) const {
-        std::unique_lock<mutex> lk(_running_lock);
+        unique_lock<mutex> lk(_running_lock);
         if (_running) _running_cv.wait_for(lk, rel_time);
         return _running;
     }
 
 private:
-    mutable std::mutex _running_lock;
-    mutable std::condition_variable _running_cv;
+    mutable mutex _running_lock;
+    mutable condition_variable _running_cv;
     mutable bool _running = true;
 
-    std::mutex _push_mutex;
-    std::priority_queue<T, std::vector<T>, std::function<bool(const T&, const T&)>> _queue;
+    mutex _push_mutex;
+    priority_queue<T, vector<T>, function<bool(const T&, const T&)>> _queue;
 };
 
 template <typename T>
@@ -362,7 +326,7 @@ struct Solver {
     DeadlockDB<Boxes> deadlock_db;
 
     Solver(const Level* level, const SolverOptions& options)
-            : concurrency(options.single_thread ? 1 : std::thread::hardware_concurrency())
+            : concurrency(options.single_thread ? 1 : thread::hardware_concurrency())
             , options(options)
             , level(level)
             , queue(concurrency)
@@ -480,7 +444,7 @@ struct Solver {
         if (goals.contains(ns.boxes)) {
             queue.shutdown();
             auto& result = *ws.result;
-            std::unique_lock<mutex> lock(result._mutex);
+            unique_lock<mutex> lock(result._mutex);
             if (!result._data.has_value()) result._data = pair<State, StateInfo>{ns, nsi};
         }
         return true;
@@ -491,7 +455,7 @@ struct Solver {
         Timestamp start_ts;
         optional<Timestamp> end_ts;
         if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
-        std::atomic<bool> timed_out = false;
+        atomic<bool> timed_out = false;
 
         if (pre_normalize) normalize(level, start);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
@@ -501,8 +465,8 @@ struct Solver {
 
         Protected<optional<pair<State, StateInfo>>> result;
 
-        counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
+        counters.resize(thread::hardware_concurrency());
+        thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
 
         parallel(concurrency, [&](size_t thread_id) {
             Counters& q = counters[thread_id];
@@ -568,7 +532,7 @@ struct AltSolver {
     ctpl::thread_pool pool;
 
     AltSolver(const Level* level, const SolverOptions& options)
-            : concurrency(options.single_thread ? 1 : std::thread::hardware_concurrency())
+            : concurrency(options.single_thread ? 1 : thread::hardware_concurrency())
             , options(options)
             , level(level)
             , deadlock_db(level)
@@ -665,7 +629,7 @@ struct AltSolver {
         q.queue_push_ticks += queue_push_ts.elapsed();
 
         if (goals.contains(ns.boxes)) {
-            std::unique_lock<mutex> lock(result._mutex);
+            unique_lock<mutex> lock(result._mutex);
             if (!result._data.has_value()) result._data = pair<State, StateInfo>{ns, nsi};
         }
         return true;
@@ -685,11 +649,11 @@ struct AltSolver {
 
         Protected<optional<pair<State, StateInfo>>> result;
 
-        counters.resize(std::thread::hardware_concurrency());
-        std::thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
+        counters.resize(thread::hardware_concurrency());
+        thread monitor([this, start_ts]() { Monitor(start_ts, options, level, states, queue, deadlock_db, counters); });
 
         Corrals<State> corrals(level);
-        vector<std::future<bool>> results;
+        vector<future<bool>> results;
         while (true) {
             Timestamp queue_pop_ts;
             Counters q; // TODO fixme
@@ -701,7 +665,7 @@ struct AltSolver {
             }
 
             auto p = queue_pop();
-            if (!p) return std::nullopt;
+            if (!p) return nullopt;
             const State& s = p->first;
             if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) continue;
             const StateInfo& si = p->second;
