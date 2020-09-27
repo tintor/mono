@@ -214,6 +214,7 @@ struct FestivalSolver {
 
                 print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), NumOpen(), fs_queues.size());
                 counters.print();
+                print("deadlock_db [{}]\n", deadlock_db.monitor());
                 /*for (const auto& [features, queue] : fs_queues) {
                     print("features {}, queue {}\n", features.summary(), queue.size());
                     if ((rand() % 40 == 0 || features.connectivity == 1) && !queue.empty()) {
@@ -240,6 +241,7 @@ struct FestivalSolver {
                     counters.total_ticks += prev_ts.elapsed();
                     print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), NumOpen(), fs_queues.size());
                     counters.print();
+                    print("deadlock_db [{}]\n", deadlock_db.monitor());
                     return true;
                 }
                 if (options.debug) {
