@@ -195,18 +195,6 @@ void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Leve
 
         Counters q;
         for (const Counters& c : counters) q.add(c);
-        ulong else_ticks = q.total_ticks;
-        else_ticks -= q.queue_pop_ticks;
-        else_ticks -= q.corral_ticks;
-        else_ticks -= q.corral2_ticks;
-        else_ticks -= q.is_simple_deadlock_ticks;
-        else_ticks -= q.contains_frozen_boxes_ticks;
-        else_ticks -= q.norm_ticks;
-        else_ticks -= q.states_query_ticks;
-        else_ticks -= q.heuristic_ticks;
-        else_ticks -= q.state_insert_ticks;
-        else_ticks -= q.queue_push_ticks;
-        q.else_ticks = else_ticks;
 
         print("elapsed {} ", seconds);
         q.print();

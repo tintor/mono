@@ -3,7 +3,7 @@
 #include "sokoban/level.h"
 #include "sokoban/pair_visitor.h"
 #include "sokoban/counters.h"
-#include "sokoban/heuristic.h"
+#include "sokoban/maximum_matching.h"
 
 template <typename Boxes>
 bool solved(const Level* level, const Boxes& boxes) {
@@ -62,6 +62,8 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
 
     return false;
 }
+
+// TODO: Index patterns by last pushed box (and push direction).
 
 // Thread-safe, and allows adding duplicate / redundant patterns!
 class Patterns {
@@ -253,7 +255,26 @@ public:
             q.frozen_box_deadlocks += 1;
             return true;
         }
+
+        if (TIMER(is_bipartite_deadlock(agent, boxes), q.bipartite_ticks)) {
+            return true;
+        }
         return false;
+    }
+
+    bool is_bipartite_deadlock(const int agent, const Boxes& boxes) const {
+        BipartiteGraph graph;
+        graph.reset(_level->num_goals, _level->num_goals);
+        int num_boxes = 0;
+        for (const Cell* b : _level->alive()) {
+            if (boxes[b]) {
+                for (int i = 0; i < _level->num_goals; i++) {
+                    graph.add_edge(num_boxes + 1, i + 1);
+                }
+                num_boxes += 1;
+            }
+        }
+        return graph.maximum_matching() < _level->num_goals;
     }
 
     size_t size() const { return _patterns.size(); }

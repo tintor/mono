@@ -38,13 +38,13 @@ struct Features {
 };
 
 struct Closed {
-    optional<State> prev;
+    State prev; // in starting state: prev == state
     ushort distance = 0;
 };
 
 struct Queued {
     State state;
-    optional<State> prev;
+    State prev; // in starting state: prev == state
     ushort distance = 0;
 
     bool operator==(const Queued& o) const { return distance == o.distance; }
@@ -168,89 +168,12 @@ Features ComputeFeatures(const Cell* agent, const Boxes& boxes) {
     return features;
 }
 
-#if 0
-template <typename State, typename Queue>
-void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Level* level, const flat_hash_map<State, Closed>& states, const map<Features, min_priority_queue<Queued>>& queues, DeadlockDB<typename State::Boxes>& deadlock_db, vector<Counters>& counters) {
-    Corrals<State> corrals(level);
-    bool running = options.verbosity > 0 && options.monitor;
-    if (!running) return;
-
-    while (running) {
-        if (!queue.wait_while_running_for(5s)) running = false;
-        long seconds = std::lround(start_ts.elapsed_s());
-        if (seconds < 4 && running) continue;
-
-        auto total = states.size();
-        auto open = queue.size();
-        auto closed = (total >= open) ? total - open : 0;
-
-        print("{}: states {} ({} {} {:.1f})\n", level->name, total, closed, open, 100. * open / total);
-
-        Counters q;
-        for (const Counters& c : counters) q.add(c);
-        ulong else_ticks = q.total_ticks;
-        else_ticks -= q.queue_pop_ticks;
-        else_ticks -= q.corral_ticks;
-        else_ticks -= q.corral2_ticks;
-        else_ticks -= q.is_simple_deadlock_ticks;
-        else_ticks -= q.contains_frozen_boxes_ticks;
-        else_ticks -= q.norm_ticks;
-        else_ticks -= q.states_query_ticks;
-        else_ticks -= q.heuristic_ticks;
-        else_ticks -= q.state_insert_ticks;
-        else_ticks -= q.queue_push_ticks;
-        q.else_ticks = else_ticks;
-
-        print("elapsed {} ", seconds);
-        q.print();
-        print("deadlock_db [{}]", deadlock_db.monitor());
-        print(" states [{}]", states.monitor());
-        print(" queue [{}]", queue.monitor());
-        print("\n");
-        if (options.verbosity < 2) continue;
-
-        while (true) {
-            auto ss = queue.top();
-            if (!ss.has_value()) break;
-            State s = ss.value();
-
-            if (deadlock_db.is_complex_deadlock(s.agent, s.boxes, q)) {
-                if (!queue.wait_while_running_for(10ms)) return;
-                continue;
-            }
-
-            int shard = StateMap<State>::shard(s);
-            states.lock(shard);
-            const StateInfo* si = states.query(s, shard);
-            states.unlock(shard);
-
-            int priority = int(si->distance) * options.dist_w + int(si->heuristic) * options.heur_w;
-            print("distance {}, heuristic {}, priority {}\n", si->distance, si->heuristic, priority);
-            corrals.find_unsolved_picorral(s);
-            PrintWithCorral(level, s, corrals.opt_picorral());
-
-            /*for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
-                const Cell* c = b->dir(d);
-                if (corrals.has_picorral() && !corrals.picorral()[c->id]) return;
-                State ns(b->id, s.boxes);
-                ns.boxes.reset(b->id);
-                ns.boxes.set(c->id);
-                if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return;
-                print("child: dist {}, heur {}\n", si->distance + 1, heuristic(level, ns.boxes));
-                Print(level, ns.agent, ns.boxes);
-            });*/
-            break;
-        }
-    }
-}
-#endif
-
 struct FestivalSolver {
     const SolverOptions options;
 
     const Level* level;
     flat_hash_map<State, Closed> closed_states;
-    map<Features, min_priority_queue<Queued>> fs_queues;  // using map for stable iterators
+    map<Features, min_priority_queue<Queued>> fs_queues;  // using map for fast iteration
     Counters counters;
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
@@ -262,6 +185,11 @@ struct FestivalSolver {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
+    void Enqueue(Queued queued) {
+        Features features = TIMER(ComputeFeatures(level->cells[queued.state.agent], queued.state.boxes), counters.features_ticks);
+        TIMER(fs_queues[features].push(std::move(queued)), counters.queue_push_ticks);
+    }
+
     bool Solve(Agent start_agent, const Boxes& start_boxes) {
         if (start_boxes == goals) return true;
         Timestamp start_ts;
@@ -269,14 +197,15 @@ struct FestivalSolver {
         if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
 
         normalize(level, &start_agent, start_boxes);
-        fs_queues[ComputeFeatures(level->cells[start_agent], start_boxes)].push({.state = State(start_agent, start_boxes), .distance = 0});
+        Enqueue({.state = State(start_agent, start_boxes), .distance = 0});
 
-        //thread monitor([this, start_ts]() { Monitor(start_ts, options, level, closed_states, fs_queues, deadlock_db, counters); });
         Corrals<State> corrals(level);
 
         Timestamp prev_ts;
-        while (true) {
+        while (!fs_queues.empty()) {
             if (prev_ts.elapsed_s() >= 5) {
+                counters.total_ticks += prev_ts.elapsed();
+
                 size_t open = 0;
                 for (const auto& [_, queue] : fs_queues) open += queue.size();
                 print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), open, fs_queues.size());
@@ -292,18 +221,16 @@ struct FestivalSolver {
                 prev_ts = Timestamp();
             }
 
-            bool popped = false;
             for (auto it = fs_queues.begin(); it != fs_queues.end();) {
                 auto& queue = it->second;
                 if (queue.empty()) { it = fs_queues.erase(it); continue; }
 
                 Queued queued = queue.top();
-                queue.pop();
-                popped = true;
+                TIMER(queue.pop(), counters.queue_pop_ticks);
 
                 const State& s = queued.state;
                 if (closed_states.contains(s)) { it++; continue; }
-                closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance});
+                TIMER(closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance}), counters.state_insert_ticks);
 
                 if (goals.contains(s.boxes)) return true;
                 if (options.debug) {
@@ -314,23 +241,21 @@ struct FestivalSolver {
                 corrals.find_unsolved_picorral(s);
                 for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
                     const Cell* c = b->dir(d);
-                    if (corrals.has_picorral() && !corrals.picorral()[c->id]) return;
+                    if (corrals.has_picorral() && !corrals.picorral()[c->id]) { counters.corral_cuts += 1; return; }
 
                     State ns(b->id, s.boxes);
                     ns.boxes.move(b, c);
-                    normalize(level, &ns.agent, ns.boxes);
+                    TIMER(normalize(level, &ns.agent, ns.boxes), counters.norm_ticks);
 
-                    if (closed_states.contains(ns)) return;
+                    if (closed_states.contains(ns)) { counters.duplicates += 1; return; }
                     if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, counters)) return;
 
-                    auto& nq = fs_queues[ComputeFeatures(level->cells[ns.agent], ns.boxes)];
-                    nq.push({.state = std::move(ns), .prev = s, .distance = ushort(queued.distance + 1)});
+                    Enqueue({.state = std::move(ns), .prev = s, .distance = ushort(queued.distance + 1)});
                 });
 
             }
-            if (!popped) return false;
         }
-        //monitor.join();
+        return false;
     }
 };
 

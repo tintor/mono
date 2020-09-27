@@ -69,7 +69,7 @@ cc_library(
 cc_library(
     name = "deadlock",
     hdrs = ["deadlock.h"],
-    deps = [":level", ":util", ":counters", ":heuristic"],
+    deps = [":level", ":util", ":counters", ":maximum_matching"],
 )
 
 cc_library(
