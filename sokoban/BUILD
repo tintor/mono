@@ -10,6 +10,8 @@ cc_library(
     ],
 )
 
+library(name = "maximum_matching", deps = [":common"])
+
 cc_library(
     name = "level_env",
     hdrs = ["level_env.h"],
