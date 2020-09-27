@@ -74,7 +74,9 @@ struct Counters {
         tick("is_simple_deadlock", is_simple_deadlock_ticks, &first);
         tick("db_contains_pattern", db_contains_pattern_ticks, &first);
         tick("contains_frozen_boxes", contains_frozen_boxes_ticks, &first);
-        tick("pattern_matches", pattern_matches_ticks, &first);
+        tick("cfb: pattern_match", pattern_matches_ticks, &first);
+        tick("cfb: box_blocked_goals", contains_box_blocked_goals_ticks, &first);
+        tick("cfb: add", pattern_add_ticks, &first);
         tick("bipartite", bipartite_ticks, &first);
         tick("norm", norm_ticks, &first);
         tick("states_query", states_query_ticks, &first);
@@ -82,8 +84,6 @@ struct Counters {
         tick("state_insert", state_insert_ticks, &first);
         tick("queue_push", queue_push_ticks, &first);
         tick("features", features_ticks, &first);
-        tick("pattern_add", pattern_add_ticks, &first);
-        tick("contains_box_blocked_goals", contains_box_blocked_goals_ticks, &first);
         tick("else", else_ticks(), &first);
 
         ::print("\ndeadlocks (simple {}, db {}, frozen_box {}, bipartite {}, heuristic {})", simple_deadlocks, db_deadlocks, frozen_box_deadlocks, bipartite_deadlocks, heuristic_deadlocks);
