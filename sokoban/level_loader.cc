@@ -382,6 +382,14 @@ void ComputeGoalPenalties(Level* level) {
     for (int i = level->num_goals; i < level->num_alive; i++) {
         level->cells[i]->goal_penalty = next_penalty;
     }
+
+    level->goals_in_packing_order.resize(level->num_goals);
+    for (int i = 0; i < level->num_goals; i++) {
+        level->goals_in_packing_order[i] = level->cells[i];
+    }
+    sort(level->goals_in_packing_order, [](Cell* a, Cell* b) {
+        return a->goal_penalty < b->goal_penalty;
+    });
 }
 
 const Level* LoadLevel(string_view filename) {

@@ -16,7 +16,7 @@ using namespace std::chrono_literals;
 template <typename T>
 using min_priority_queue = priority_queue<T, vector<T>, std::greater<T>>;
 
-using Boxes = DenseBoxes<2>;
+using Boxes = DenseBoxes<4>;
 using State = TState<Boxes>;
 
 struct Features {
@@ -51,11 +51,15 @@ struct Queued {
     bool operator>(const Queued& o) const { return distance > o.distance; }
 };
 
+// Number of boxes on goals in goal_penalty order.
 ushort ComputePacking(const Cell* agent, const Boxes& boxes) {
-    // TODO number of boxes on goals in specific order
     ushort count = 0;
-    for (const Cell* g : agent->level->goals()) {
-        if (boxes[g->id]) count += 1;
+    for (const Cell* g : agent->level->goals_in_packing_order) {
+        if (boxes[g->id]) {
+            count += 1;
+        } else {
+            break;
+        }
     }
     return count;
 }
@@ -65,10 +69,10 @@ ushort ComputeConnectivity(const Cell* agent, const Boxes& boxes) {
     ushort count = 0;
     AgentVisitor visitor(agent->level);
     // TODO mark all boxes as visited for perf
-    for (const Cell* start : agent->level->cells) {
-        if (!visitor.visited(start) && !boxes[start]) {
+    for (const Cell* v : agent->level->cells) {
+        if (!visitor.visited(v) && !boxes[v]) {
             count += 1;
-            visitor.add(start);
+            visitor.add(v);
             for (const Cell* a : visitor) {
                 for (auto [_, b] : a->moves) {
                     if (!boxes[b]) visitor.add(b);
@@ -79,14 +83,80 @@ ushort ComputeConnectivity(const Cell* agent, const Boxes& boxes) {
     return count;
 }
 
-ushort ComputeRoomConnectivity(const Cell* agent, const Boxes& boxes) {
-    // TODO
-    return 0;
+// TODO precompute in level
+bool IsGate(const Cell* a) {
+    for (int d = 0; d < 4; d++) {
+        const Cell* b = a->dir(d);
+        if (b && (!a->dir(d + 1) || !b->dir(d + 1)) && (!a->dir(d - 1) || !b->dir(d - 1))) return true;
+    }
+    // Two diagonal cases:
+    if (a->moves.size() >= 3) {
+        if (!a->dir8[4] && !a->dir8[7]) return true;
+        if (!a->dir8[5] && !a->dir8[6]) return true;
+    }
+    return false;
 }
 
+// How many boxes are in a gate? (ie. blocking movement between two areas)
+ushort ComputeRoomConnectivity(const Cell* agent, const Boxes& boxes) {
+    ushort count = 0;
+    for (const Cell* a : agent->level->alive()) {
+        if (boxes[a] && IsGate(a)) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+// If next box in packing order were to be placed next, how many non-goal boxes would be unreachable?
 ushort ComputeOutOfPlan(const Cell* agent, const Boxes& boxes) {
-    // TODO
     return 0;
+    const Cell* next_goal = nullptr;
+    for (const Cell* g : agent->level->goals_in_packing_order) {
+        if (!boxes[g->id]) {
+            next_goal = g;
+            break;
+        }
+    }
+
+    AgentVisitor reachable(agent);
+    for (const Cell* a : reachable) {
+        for (auto [_, b] : a->moves) {
+            if (!boxes[b->id] && b != next_goal) reachable.add(b);
+        }
+    }
+
+    ushort count = 0;
+    for (const Cell* a : agent->level->alive()) {
+        if (reachable.visited(a) || a == next_goal) continue;
+        if ((boxes[a] && !a->goal) || (!boxes[a] && a->goal)) count += 1;
+    }
+    return count;
+}
+
+void PrintOutOfPlan(const Cell* agent, const Boxes& boxes) {
+    const Cell* next_goal = nullptr;
+    for (const Cell* g : agent->level->goals_in_packing_order) {
+        if (!boxes[g->id]) {
+            next_goal = g;
+            break;
+        }
+    }
+
+    AgentVisitor reachable(agent);
+    for (const Cell* a : reachable) {
+        for (auto [_, b] : a->moves) {
+            if (!boxes[b->id] && b != next_goal) reachable.add(b);
+        }
+    }
+
+    string str;
+    Print(agent->level, agent->id, boxes, [&](const Cell* e) -> string_view {
+        if (e == next_goal) return " @";
+        if (!e->alive || reachable.visited(e) || e == next_goal) return "";
+        if ((boxes[e] && !e->goal) || (!boxes[e] && e->goal)) return " x";
+        return "";
+    });
 }
 
 Features ComputeFeatures(const Cell* agent, const Boxes& boxes) {
@@ -211,22 +281,27 @@ struct FestivalSolver {
                 for (const auto& [_, queue] : fs_queues) open += queue.size();
                 print("elapsed {}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), open, fs_queues.size());
                 for (const auto& [features, queue] : fs_queues) {
-                    if (queue.size() > 0) {
-                        print("features {}, queue {}\n", features.summary(), queue.size());
+                    print("features {}, queue {}\n", features.summary(), queue.size());
+                    if ((rand() % 40 == 0 || features.connectivity == 1) && !queue.empty()) {
+                        const State& s = queue.top().state;
+                        Print(level, s.agent, s.boxes);
+                        //PrintOutOfPlan(level->cells[s.agent], s.boxes);
                     }
                 }
                 prev_ts = Timestamp();
             }
 
             bool popped = false;
-            for (auto& [features, queue] : fs_queues) {
-                if (queue.empty()) continue;
+            for (auto it = fs_queues.begin(); it != fs_queues.end();) {
+                auto& queue = it->second;
+                if (queue.empty()) { it = fs_queues.erase(it); continue; }
+
                 Queued queued = queue.top();
                 queue.pop();
                 popped = true;
 
                 const State& s = queued.state;
-                if (closed_states.contains(s)) continue;
+                if (closed_states.contains(s)) { it++; continue; }
                 closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance});
 
                 if (goals.contains(s.boxes)) return true;
@@ -250,6 +325,7 @@ struct FestivalSolver {
                     auto& nq = fs_queues[ComputeFeatures(level->cells[ns.agent], ns.boxes)];
                     nq.push({.state = std::move(ns), .prev = s, .distance = ushort(queued.distance + 1)});
                 });
+
             }
             if (!popped) return false;
         }

@@ -11,9 +11,11 @@ struct Level {
     vector<int2> initial_steps;
 
     // TODO unique_ptr<Cell>
-    vector<Cell*> cells;  // ordinal -> Cell*, goals first, then alive, then dead cells
+    vector<Cell*> cells;  // ordinal -> Cell*, goals first (in penalty order), then alive, then dead cells
     cspan<Cell*> alive() const { return cspan<Cell*>(cells.data(), num_alive); }
     cspan<Cell*> goals() const { return cspan<Cell*>(cells.data(), num_goals); }
+
+    vector<Cell*> goals_in_packing_order;
 
     int num_goals;
     int num_alive;
