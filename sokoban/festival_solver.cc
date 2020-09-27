@@ -190,6 +190,12 @@ struct FestivalSolver {
         TIMER(fs_queues[features].push(std::move(queued)), counters.queue_push_ticks);
     }
 
+    ulong NumOpen() const {
+        ulong open = 0;
+        for (const auto& [_, queue] : fs_queues) open += queue.size();
+        return open;
+    }
+
     bool Solve(Agent start_agent, const Boxes& start_boxes) {
         if (start_boxes == goals) return true;
         Timestamp start_ts;
@@ -206,9 +212,7 @@ struct FestivalSolver {
             if (prev_ts.elapsed_s() >= 5) {
                 counters.total_ticks += prev_ts.elapsed();
 
-                size_t open = 0;
-                for (const auto& [_, queue] : fs_queues) open += queue.size();
-                print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), open, fs_queues.size());
+                print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), NumOpen(), fs_queues.size());
                 counters.print();
                 /*for (const auto& [features, queue] : fs_queues) {
                     print("features {}, queue {}\n", features.summary(), queue.size());
@@ -232,7 +236,12 @@ struct FestivalSolver {
                 if (closed_states.contains(s)) { it++; continue; }
                 TIMER(closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance}), counters.state_insert_ticks);
 
-                if (goals.contains(s.boxes)) return true;
+                if (goals.contains(s.boxes)) {
+                    counters.total_ticks += prev_ts.elapsed();
+                    print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), NumOpen(), fs_queues.size());
+                    counters.print();
+                    return true;
+                }
                 if (options.debug) {
                     print("popped:\n");
                     Print(level, s.agent, s.boxes);

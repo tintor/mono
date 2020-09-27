@@ -231,9 +231,13 @@ public:
         Boxes boxes_copy = boxes;
         int num_boxes = _level->goals().size(); // TODO assumption!
 
+        auto pm = q.pattern_matches_ticks;
         auto p = TIMER(contains_frozen_boxes(_level->cells[agent], boxes, boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
+        q.contains_frozen_boxes_ticks -= q.pattern_matches_ticks - pm;
+
         Result result = p.first;
         if (result == Result::Frozen) {
+            Timestamp ts;
             unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
                 //print("pre-minimization:\n");
@@ -246,7 +250,9 @@ public:
                     _patterns.add(agent, boxes_copy);
                 }
             }
+            q.pattern_add_ticks += ts.elapsed();
         }
+
         if (result == Result::BlockedGoal || result == Result::PushBlockedGoal) {
             // TODO add goal room deadlock pattern
         }
@@ -354,7 +360,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                bool m = is_simple_deadlock(c, boxes) || TIMER(_patterns.matches(a->id, boxes, true), q.fb1b_ticks);
+                bool m = is_simple_deadlock(c, boxes) || TIMER(_patterns.matches(a->id, boxes, true), q.pattern_matches_ticks);
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -362,7 +368,7 @@ private:
                 }
 
                 // agent pushes box from B to C (and box disappears)
-                if (--num_boxes == 1) { q.fb1 += 1; return {Result::NotFrozen, 2}; }
+                if (--num_boxes == 1) return {Result::NotFrozen, 2};
                 visitor.add(b);
             }
 
@@ -382,7 +388,7 @@ private:
 
                 boxes.reset(b->id);
                 boxes.set(c->id);
-                bool m = is_simple_deadlock(c, boxes) || _patterns.matches(a->id, boxes);
+                bool m = is_simple_deadlock(c, boxes) || TIMER(_patterns.matches(a->id, boxes), q.pattern_matches_ticks);
                 boxes.reset(c->id);
                 if (m) {
                     boxes.set(b->id);
@@ -390,16 +396,15 @@ private:
                 }
 
                 // agent pushes box from B to C (and box disappears)
-                if (--num_boxes == 1) { q.fb2 += 1; return {Result::NotFrozen, 4}; }
+                if (--num_boxes == 1) return {Result::NotFrozen, 4};
                 visitor.clear();  // <-- Necessary for edge cases.
                 visitor.add(b);
                 break; // <-- Necesary for edge cases.
             }
 
-        if (!solved(agent->level, boxes)) { q.fb3 += 1; return { Result::Frozen, 5}; }
-        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) { q.fb4 += 1; return {Result::BlockedGoal, 6}; }
-        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) { q.fb5 += 1; return {Result::PushBlockedGoal, 7}; }
-        q.fb6 += 1;
+        if (!solved(agent->level, boxes)) return {Result::Frozen, 5};
+        if (!all_empty_goals_are_reachable(_level, visitor, boxes)) return {Result::BlockedGoal, 6};
+        if (contains_box_blocked_goals(agent, orig_boxes, boxes)) return {Result::PushBlockedGoal, 7};
         return {Result::NotFrozen, 8};
     }
 
