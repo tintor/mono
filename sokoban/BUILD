@@ -19,7 +19,7 @@ cc_library(
 
 cc_library(name = "cell", hdrs = ["cell.h"], deps = ["//core:numeric"])
 
-library(name = "state", deps = [":cell", "//core:array_bool", "//core:exception", "//core:fmt"])
+library(name = "state", deps = [":cell", ":common", "//core:array_bool", "//core:exception", "//core:fmt"])
 
 cc_library(
     name = "pair_visitor",

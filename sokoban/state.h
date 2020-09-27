@@ -5,10 +5,11 @@
 #include "core/murmur3.h"
 #include "core/fmt.h"
 #include "sokoban/cell.h"
+#include "sokoban/common.h"
 
 using Agent = uint;
 
-inline bool equal(const std::vector<char>& a, const std::vector<char>& b) {
+inline bool equal(const vector<char>& a, const vector<char>& b) {
     size_t m = std::min(a.size(), b.size());
     if (!std::equal(a.begin(), a.begin() + m, b.begin())) return false;
 
@@ -17,14 +18,14 @@ inline bool equal(const std::vector<char>& a, const std::vector<char>& b) {
     return true;
 }
 
-inline bool contains(const std::vector<char>& a, const std::vector<char>& b) {
+inline bool contains(const vector<char>& a, const vector<char>& b) {
     for (int i = 0; i < b.size(); i++) {
         if (b[i] && (i >= a.size() || !a[i])) return false;
     }
     return true;
 }
 
-inline size_t hash(const std::vector<char>& a) {
+inline size_t hash(const vector<char>& a) {
     size_t hash = 0;
     for (size_t i = 0; i < a.size(); i++) if (a[i]) hash ^= size_t(1) << (i % 64);
     return hash;
@@ -55,7 +56,7 @@ struct DynamicBoxes {
     }
     void print() {}
    private:
-    std::vector<char> data;
+    vector<char> data;
 };
 
 template <int Words>
