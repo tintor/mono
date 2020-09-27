@@ -2,10 +2,17 @@
 #define NIL 0
 #define INF INT_MAX
 
-BipartiteGraph::BipartiteGraph(int m, int n) {
+void BipartiteGraph::reset(int m, int n) {
     this->m = m;
     this->n = n;
-    adj.resize(m+1);
+
+    // Never shrink adj to avoid deallocating individual vectors.
+    if (adj.size() < m + 1) {
+        adj.resize(m + 1);
+    }
+    for (int i = 0; i <= m; i++) {
+        adj[i].clear();
+    }
 
     // pairU[u] stores pair of u in matching where u
     // is a vertex on left side of Bipartite Graph.
@@ -23,7 +30,7 @@ BipartiteGraph::BipartiteGraph(int m, int n) {
 }
 
 // Returns size of maximum matching
-int BipartiteGraph::maximum_matching() {
+int BipartiteGraph::maximum_matching() const {
     // Initialize NIL as pair of all vertices
     for (int u = 0; u <= m; u++) pairU[u] = NIL;
     for (int v = 0; v <= n; v++) pairV[v] = NIL;
@@ -46,9 +53,7 @@ int BipartiteGraph::maximum_matching() {
 
 // Returns true if there is an augmenting path, else returns
 // false
-bool BipartiteGraph::bfs() {
-    array_deque<int> Q; //an integer queue
-
+bool BipartiteGraph::bfs() const {
     // First layer of vertices (set distance as 0)
     for (int u = 1; u <= m; u++) {
         // If this is a free vertex, add it to queue
@@ -92,7 +97,7 @@ bool BipartiteGraph::bfs() {
 }
 
 // Returns true if there is an augmenting path beginning with free vertex u
-bool BipartiteGraph::dfs(int u) {
+bool BipartiteGraph::dfs(int u) const {
     if (u != NIL) {
         for (int v : adj[u]) {
             // Follow the distances set by BFS

@@ -3,7 +3,8 @@
 #include "catch.hpp"
 
 TEST_CASE("maximum_matching EASY", "") {
-    BipartiteGraph g(4, 4);
+    BipartiteGraph g;
+    g.reset(4, 4);
     g.add_edge(1, 4);
     g.add_edge(2, 3);
     g.add_edge(3, 2);
@@ -12,7 +13,8 @@ TEST_CASE("maximum_matching EASY", "") {
 }
 
 TEST_CASE("maximum_matching B", "") {
-    BipartiteGraph g(4, 4);
+    BipartiteGraph g;
+    g.reset(4, 4);
     g.add_edge(1, 1);
     g.add_edge(1, 2);
     g.add_edge(1, 4);
@@ -24,7 +26,8 @@ TEST_CASE("maximum_matching B", "") {
 }
 
 TEST_CASE("maximum_matching FULL", "") {
-    BipartiteGraph g(4, 4);
+    BipartiteGraph g;
+    g.reset(4, 4);
     for (int a = 1; a <= 4; a++) for (int b = 1; b <= 4; b++) g.add_edge(a, b);
     REQUIRE(g.maximum_matching() == 4);
 }

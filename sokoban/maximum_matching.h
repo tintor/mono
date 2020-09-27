@@ -12,23 +12,25 @@ class BipartiteGraph {
     // adj[u] stores adjacents of left side
     // vertex 'u'. The value of u ranges from 1 to m.
     // 0 is used for dummy vertex
-    vector<list<int>> adj;
+    vector<vector<int>> adj;
 
-    vector<int> pairU, pairV, dist;
+    mutable vector<int> pairU, pairV, dist;
+
+    mutable array_deque<int> Q; // used by bfs()
 
     // Returns true if there is an augmenting path
-    bool bfs();
+    bool bfs() const;
 
     // Adds augmenting path if there is one beginning
     // with u
-    bool dfs(int u);
+    bool dfs(int u) const;
 
 public:
-    BipartiteGraph(int m, int n);
+    void reset(int m, int n);
 
     // Add edge from u to v and v to u
     void add_edge(int u, int v) { adj[u].push_back(v); }
 
     // Returns size of maximum matcing
-    int maximum_matching();
+    int maximum_matching() const;
 };
