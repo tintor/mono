@@ -14,38 +14,10 @@
 using namespace std::chrono_literals;
 
 template <typename T>
-using min_priority_queue = std::priority_queue<T, std::vector<T>, std::greater<T>>;
+using min_priority_queue = priority_queue<T, vector<T>, std::greater<T>>;
 
 using Boxes = DenseBoxes<2>;
 using State = TState<Boxes>;
-
-/*class StatePriorityQueue {
-    struct T {
-        Boxes boxes;
-        Agent agent;
-        float priority;
-    };
-
-public:
-    StatePriorityQueue() : _queue([](const T& a, const T& b) { return b.priority < a.priority; }) { }
-
-    void push(State s, float priority) {
-        _queue.push({std::move(s.boxes), s.agent, priority});
-    }
-
-    State pop() {
-        if (_queue.empty()) THROW(runtime_error, "queue is empty");
-        ON_SCOPE_EXIT(_queue.pop());
-        return State(_queue.top().agent, std::move(_queue.top().boxes));
-    }
-
-    size_t size() const { return _queue.size(); }
-
-    std::string monitor() const { return format(""); }
-
-private:
-    std::priority_queue<T, std::vector<T>, std::function<bool(const T&, const T&)>> _queue;
-};*/
 
 struct Features {
     ushort packing;
@@ -208,7 +180,7 @@ struct FestivalSolver {
 
     const Level* level;
     flat_hash_map<State, Closed> closed_states;
-    map<Features, min_priority_queue<Queued>> fs_queues;  // using std::map for stable iterators
+    map<Features, min_priority_queue<Queued>> fs_queues;  // using map for stable iterators
     Counters counters;
     Boxes goals;
     DeadlockDB<Boxes> deadlock_db;
@@ -229,7 +201,7 @@ struct FestivalSolver {
         normalize(level, start);
         fs_queues[ComputeFeatures(level, start)].push({.state = start, .distance = 0});
 
-        //std::thread monitor([this, start_ts]() { Monitor(start_ts, options, level, closed_states, fs_queues, deadlock_db, counters); });
+        //thread monitor([this, start_ts]() { Monitor(start_ts, options, level, closed_states, fs_queues, deadlock_db, counters); });
         Corrals<State> corrals(level);
 
         Timestamp prev_ts;
