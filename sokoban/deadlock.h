@@ -4,11 +4,6 @@
 #include "sokoban/pair_visitor.h"
 #include "sokoban/counters.h"
 #include "sokoban/heuristic.h"
-#include <shared_mutex>
-
-using std::vector;
-using std::array;
-using std::mutex;
 
 template <typename Boxes>
 bool solved(const Level* level, const Boxes& boxes) {
@@ -84,8 +79,8 @@ public:
     template <typename Boxes>
     bool matches(const int agent, const Boxes& boxes, bool print_it = false) {
         /*if (print_it) {
-            static std::mutex m;
-            std::unique_lock lock(m);
+            static mutex m;
+            unique_lock lock(m);
             print("matches?\n");
             Print(_level, TState<Boxes>(agent, boxes));
         }*/
@@ -140,7 +135,7 @@ public:
         return size;
     }
 
-    std::string summary() const {
+    string summary() const {
         vector<int> count(100);
         _mutex.lock_shared();
         const Word* end = _words.data() + _words.size();
@@ -150,7 +145,7 @@ public:
             count[b] += 1;
         }
         _mutex.unlock_shared();
-        std::string s;
+        string s;
         for (int i = 0; i < count.size(); i++) if (count[i] > 0) s += format(" {}:{}", i, count[i]);
         return s;
     }
@@ -199,7 +194,7 @@ private:
     const int _agent_words;
     const int _box_words;
 
-    mutable std::shared_mutex _mutex;
+    mutable shared_mutex _mutex;
     vector<Word> _words;
 };
 
@@ -237,7 +232,7 @@ public:
         auto p = TIMER(contains_frozen_boxes(_level->cells[agent], boxes, boxes_copy, num_boxes, q), q.contains_frozen_boxes_ticks);
         Result result = p.first;
         if (result == Result::Frozen) {
-            std::unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
+            unique_lock<mutex> lock(_add_mutex); // To prevent race condition of two threads adding the same pattern.
             if (!_patterns.matches(agent, boxes_copy)) {
                 //print("pre-minimization:\n");
                 //Print(_level, TState<Boxes>(agent, boxes));
@@ -263,12 +258,12 @@ public:
 
     size_t size() const { return _patterns.size(); }
 
-    std::string monitor() const {
+    string monitor() const {
         return format("{} {}", _patterns.size(), _patterns.summary());
     }
 
 private:
-    void load_patterns(const std::string_view filename) {
+    void load_patterns(const string_view filename) {
     }
 
     void save_pattern(const int agent, const Boxes& boxes) {
@@ -320,7 +315,7 @@ private:
         return contains_frozen_boxes(agent, boxes, mutable_boxes, num_boxes, dummy_counters);
     }
 
-    std::pair<Result, int> contains_frozen_boxes(const Cell* agent, const Boxes& orig_boxes, Boxes& boxes, int& num_boxes, Counters& q) {
+    pair<Result, int> contains_frozen_boxes(const Cell* agent, const Boxes& orig_boxes, Boxes& boxes, int& num_boxes, Counters& q) {
         if (num_boxes == _level->num_goals && contains_goal_without_box(_level, boxes)) return {Result::NotFrozen, 1};
 
         // Fast-path
@@ -389,6 +384,6 @@ private:
 
 private:
     const Level* _level;
-    std::mutex _add_mutex;
+    mutex _add_mutex;
     Patterns _patterns;
 };

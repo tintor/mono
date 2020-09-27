@@ -279,15 +279,16 @@ struct FestivalSolver {
             if (prev_ts.elapsed_s() >= 5) {
                 size_t open = 0;
                 for (const auto& [_, queue] : fs_queues) open += queue.size();
-                print("elapsed {}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), open, fs_queues.size());
-                for (const auto& [features, queue] : fs_queues) {
+                print("elapsed {:.0f}, closed {}, open {}, queues {}\n", start_ts.elapsed_s(), closed_states.size(), open, fs_queues.size());
+                counters.print();
+                /*for (const auto& [features, queue] : fs_queues) {
                     print("features {}, queue {}\n", features.summary(), queue.size());
                     if ((rand() % 40 == 0 || features.connectivity == 1) && !queue.empty()) {
                         const State& s = queue.top().state;
                         Print(level, s.agent, s.boxes);
-                        //PrintOutOfPlan(level->cells[s.agent], s.boxes);
                     }
-                }
+                }*/
+                print("\n");
                 prev_ts = Timestamp();
             }
 

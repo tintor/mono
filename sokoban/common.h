@@ -11,6 +11,7 @@
 #include <queue>
 #include <atomic>
 #include <list>
+#include <shared_mutex>
 
 using namespace std::chrono_literals;
 using std::nullopt;
@@ -19,6 +20,7 @@ using std::array;
 using std::list;
 using std::unique_lock;
 using std::mutex;
+using std::shared_mutex;
 using std::thread;
 using std::condition_variable;
 using std::pair;
