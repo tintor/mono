@@ -15,7 +15,6 @@ using namespace std::chrono_literals;
 using std::nullopt;
 using std::vector;
 using std::array;
-using std::lock_guard;
 using std::unique_lock;
 using std::mutex;
 using std::thread;
