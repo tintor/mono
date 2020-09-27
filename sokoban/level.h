@@ -1,7 +1,7 @@
 #pragma once
 #include "sokoban/common.h"
 #include "sokoban/cell.h"
-#include "sokoban/state.h"
+#include "sokoban/boxes.h"
 
 struct Level {
     string name;
@@ -19,7 +19,8 @@ struct Level {
     int num_alive;
     int num_boxes;
 
-    DynamicState start;
+    Agent start_agent;
+    DynamicBoxes start_boxes;
 
     const Cell* cell_by_xy(int xy) const {
         for (const Cell* cell : cells) if (cell->xy == xy) return cell;

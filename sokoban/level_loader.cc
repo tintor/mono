@@ -414,25 +414,19 @@ const Level* LoadLevel(const LevelEnv& env, bool extra) {
 
     if (m.box[m.agent]) THROW(runtime_error, "agent on box2");
     level->num_alive = m.cell_count - num_dead;
-    level->start.agent = GetCell(level, m.agent)->id;
+    level->start_agent = GetCell(level, m.agent)->id;
 
     for (Cell* c : level->cells)
-        if (c->alive) assign(level->start.boxes, c->id, m.box[c->xy]);
+        if (c->alive) assign(level->start_boxes, c->id, m.box[c->xy]);
 
-    if (level->start.agent < level->num_alive && level->start.boxes[level->start.agent])
-        THROW(runtime_error, "agent(%s) on box", level->start.agent);
+    if (level->start_agent < level->num_alive && level->start_boxes[level->start_agent])
+        THROW(runtime_error, "agent(%s) on box", level->start_agent);
 
     if (extra) {
         ComputePushDistances(level);
         ComputeGoalPenalties(level);
     }
 
-    /*auto q = Minimal::dead_region(level->cells, level->cells[level->start.agent]);
-    string label;
-    Print(level, level->start, [&q](auto e) {
-        if (contains(q, e)) return "??";
-        return "";
-    });*/
     return level;
 }
 

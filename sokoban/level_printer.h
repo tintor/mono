@@ -23,11 +23,11 @@ string_view Emoji(const Level* level, Agent agent, const Boxes& boxes, uint xy, 
     return "🕸️ ";
 }
 
-template <typename State>
-void Print(const Level* level, const State& key, function<string_view(Cell*)> fn = [] LAMBDA("")) {
-    auto frozen = goals_with_frozen_boxes(level->cells[key.agent], key.boxes, level->goals());
+template <typename Boxes>
+void Print(const Level* level, Agent agent, const Boxes& boxes, function<string_view(Cell*)> fn = [] LAMBDA("")) {
+    auto frozen = goals_with_frozen_boxes(level->cells[agent], boxes, level->goals());
     for (uint xy = 0; xy < level->buffer.size(); xy++) {
-        print(Emoji(level, key.agent, key.boxes, xy, frozen, fn));
+        print(Emoji(level, agent, boxes, xy, frozen, fn));
         if (xy % level->width == level->width - 1) print("\n");
     }
 }

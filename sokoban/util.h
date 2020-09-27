@@ -155,9 +155,9 @@ const Cell* normalize(const Cell* agent, const Boxes& boxes) {
     return agent;
 }
 
-template <typename State>
-void normalize(const Level* level, State& s) {
-    s.agent = normalize(level->cells[s.agent], s.boxes)->id;
+template <typename Boxes>
+void normalize(const Level* level, Agent* agent, const Boxes& boxes) {
+    *agent = normalize(level->cells[*agent], boxes)->id;
 }
 
 template <typename State, typename PushFn>

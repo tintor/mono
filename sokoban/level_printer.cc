@@ -15,5 +15,5 @@ inline double Complexity(const Level* level) {
 
 void PrintInfo(const Level* level) {
     print("alive {}, boxes {}, complexity {}\n", level->num_alive, level->num_boxes, (int)round(Complexity(level)));
-    Print(level, level->start);
+    Print(level, level->start_agent, level->start_boxes);
 }

@@ -132,7 +132,7 @@ template <typename State>
 pair<State, StateInfo> Previous(pair<State, StateInfo> p, const Level* level, const StateMap<State>& states) {
     auto [s, si] = p;
     if (si.distance <= 0) THROW(runtime_error, "non-positive distance");
-    normalize(level, s);
+    normalize(level, &s.agent, s.boxes);
 
     State ps;
     ps.agent = si.prev_agent;
@@ -148,7 +148,7 @@ pair<State, StateInfo> Previous(pair<State, StateInfo> p, const Level* level, co
     ps.boxes.reset(c->id);
     ps.boxes.set(b->id);
     State norm_ps = ps;
-    normalize(level, norm_ps);
+    normalize(level, &norm_ps.agent, norm_ps.boxes);
     return {ps, states.get(norm_ps, StateMap<State>::shard(norm_ps))};
 }
 
@@ -376,7 +376,7 @@ struct Solver {
         if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return false;
 
         Timestamp norm_ts;
-        normalize(level, ns);
+        normalize(level, &ns.agent, ns.boxes);
 
         Timestamp states_query_ts;
         q.norm_ticks += norm_ts.elapsed(states_query_ts);
@@ -438,7 +438,7 @@ struct Solver {
 
         if (options.debug) {
             print("child:\n");
-            Print(level, ns);
+            Print(level, ns.agent, ns.boxes);
         }
 
         if (goals.contains(ns.boxes)) {
@@ -457,7 +457,7 @@ struct Solver {
         if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
         atomic<bool> timed_out = false;
 
-        if (pre_normalize) normalize(level, start);
+        if (pre_normalize) normalize(level, &start.agent, start.boxes);
         states.add(start, StateInfo(), StateMap<State>::shard(start));
         queue.push(start, 0);
 
@@ -491,7 +491,7 @@ struct Solver {
 
                 if (options.debug) {
                     print("popped:\n");
-                    Print(level, s);
+                    Print(level, s.agent, s.boxes);
                 }
 
                 // TODO heuristic: order goals somehow (corner goals first) and try to find solution in goal order
@@ -706,7 +706,7 @@ Solution InternalSolve(const Level* level, const SolverOptions& options) {
 #endif
     } else {
         Solver<TState<Boxes>> solver(level, options);
-        auto solution = solver.Solve(level->start);
+        auto solution = solver.Solve(TState(level->start_agent, level->start_boxes));
         if (solution) return ExtractSolution(*solution, level, solver.states);
     }
     return {};
@@ -878,7 +878,7 @@ void generate_deadlocks(const Level* level, const SolverOptions& options, int nu
                     solvable.insert(p);
                 }
             } else {
-                Print(level, candidate);
+                Print(level, candidate.agent, candidate.boxes);
                 new_deadlocks.push_back(candidate);
             }
         }

@@ -52,7 +52,7 @@ class Corrals {
 
 template <typename State>
 void PrintWithCorral(const Level* level, const State& s, const std::optional<Corral>& corral) {
-    Print(level, s, [&](Cell* c) {
+    Print(level, s.agent, s.boxes, [&](Cell* c) {
         if (!corral.has_value() || !(*corral)[c->id]) return "";
         if (s.boxes[c->id]) return c->goal ? "🔷" : "⚪";
         if (c->goal) return "❔";

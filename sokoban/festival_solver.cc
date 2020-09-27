@@ -51,27 +51,27 @@ struct Queued {
     bool operator>(const Queued& o) const { return distance > o.distance; }
 };
 
-ushort ComputePacking(const Level* level, const State& state) {
+ushort ComputePacking(const Cell* agent, const Boxes& boxes) {
     // TODO number of boxes on goals in specific order
     ushort count = 0;
-    for (const Cell* g : level->goals()) {
-        if (state.boxes[g->id]) count += 1;
+    for (const Cell* g : agent->level->goals()) {
+        if (boxes[g->id]) count += 1;
     }
     return count;
 }
 
 // Number of separate areas between boxes.
-ushort ComputeConnectivity(const Level* level, const State& state) {
+ushort ComputeConnectivity(const Cell* agent, const Boxes& boxes) {
     ushort count = 0;
-    AgentVisitor visitor(level);
+    AgentVisitor visitor(agent->level);
     // TODO mark all boxes as visited for perf
-    for (const Cell* start : level->cells) {
-        if (!visitor.visited(start) && !state.boxes[start]) {
+    for (const Cell* start : agent->level->cells) {
+        if (!visitor.visited(start) && !boxes[start]) {
             count += 1;
             visitor.add(start);
             for (const Cell* a : visitor) {
                 for (auto [_, b] : a->moves) {
-                    if (!state.boxes[b]) visitor.add(b);
+                    if (!boxes[b]) visitor.add(b);
                 }
             }
         }
@@ -79,22 +79,22 @@ ushort ComputeConnectivity(const Level* level, const State& state) {
     return count;
 }
 
-ushort ComputeRoomConnectivity(const Level* level, const State& state) {
+ushort ComputeRoomConnectivity(const Cell* agent, const Boxes& boxes) {
     // TODO
     return 0;
 }
 
-ushort ComputeOutOfPlan(const Level* level, const State& state) {
+ushort ComputeOutOfPlan(const Cell* agent, const Boxes& boxes) {
     // TODO
     return 0;
 }
 
-Features ComputeFeatures(const Level* level, const State& state) {
+Features ComputeFeatures(const Cell* agent, const Boxes& boxes) {
     Features features;
-    features.packing = ComputePacking(level, state);
-    features.connectivity = ComputeConnectivity(level, state);
-    features.room_connectivity = ComputeRoomConnectivity(level, state);
-    features.out_of_plan = ComputeOutOfPlan(level, state);
+    features.packing = ComputePacking(agent, boxes);
+    features.connectivity = ComputeConnectivity(agent, boxes);
+    features.room_connectivity = ComputeRoomConnectivity(agent, boxes);
+    features.out_of_plan = ComputeOutOfPlan(agent, boxes);
     return features;
 }
 
@@ -167,7 +167,7 @@ void Monitor(const Timestamp& start_ts, const SolverOptions& options, const Leve
                 ns.boxes.set(c->id);
                 if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, q)) return;
                 print("child: dist {}, heur {}\n", si->distance + 1, heuristic(level, ns.boxes));
-                Print(level, ns);
+                Print(level, ns.agent, ns.boxes);
             });*/
             break;
         }
@@ -192,14 +192,14 @@ struct FestivalSolver {
         for (Cell* c : level->goals()) goals.set(c->id);
     }
 
-    bool Solve(State start) {
-        if (start.boxes == goals) return true;
+    bool Solve(Agent start_agent, const Boxes& start_boxes) {
+        if (start_boxes == goals) return true;
         Timestamp start_ts;
         optional<Timestamp> end_ts;
         if (options.max_time != 0) end_ts = Timestamp(start_ts.ticks() + ulong(options.max_time / Timestamp::ms_per_tick() * 1000));
 
-        normalize(level, start);
-        fs_queues[ComputeFeatures(level, start)].push({.state = start, .distance = 0});
+        normalize(level, &start_agent, start_boxes);
+        fs_queues[ComputeFeatures(level->cells[start_agent], start_boxes)].push({.state = State(start_agent, start_boxes), .distance = 0});
 
         //thread monitor([this, start_ts]() { Monitor(start_ts, options, level, closed_states, fs_queues, deadlock_db, counters); });
         Corrals<State> corrals(level);
@@ -232,7 +232,7 @@ struct FestivalSolver {
                 if (goals.contains(s.boxes)) return true;
                 if (options.debug) {
                     print("popped:\n");
-                    Print(level, s);
+                    Print(level, s.agent, s.boxes);
                 }
 
                 corrals.find_unsolved_picorral(s);
@@ -242,12 +242,12 @@ struct FestivalSolver {
 
                     State ns(b->id, s.boxes);
                     ns.boxes.move(b, c);
-                    normalize(level, ns);
+                    normalize(level, &ns.agent, ns.boxes);
 
                     if (closed_states.contains(ns)) return;
                     if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, counters)) return;
 
-                    auto& nq = fs_queues[ComputeFeatures(level, ns)];
+                    auto& nq = fs_queues[ComputeFeatures(level->cells[ns.agent], ns.boxes)];
                     nq.push({.state = std::move(ns), .prev = s, .distance = ushort(queued.distance + 1)});
                 });
             }
@@ -263,7 +263,7 @@ pair<vector<int2>, int> FestivalSolve(LevelEnv env, const SolverOptions& options
     if (options.verbosity > 0) PrintInfo(level);
     ON_SCOPE_EXIT(Destroy(level));
     FestivalSolver solver(level, options);
-    if (!solver.Solve(level->start)) return {};
+    if (!solver.Solve(level->start_agent, level->start_boxes)) return {};
     int2 a = {0, 0};
     return {{a}, 1}; // TODO
 }

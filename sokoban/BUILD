@@ -19,7 +19,8 @@ cc_library(
 
 cc_library(name = "cell", hdrs = ["cell.h"], deps = ["//core:numeric"])
 
-library(name = "state", deps = [":cell", ":common", "//core:array_bool", "//core:exception", "//core:fmt"])
+cc_library(name = "boxes", hdrs = ["boxes.h"], deps = [":cell", ":common", "//core:array_bool", "//core:exception", "//core:fmt"])
+library(name = "state", deps = [":boxes"])
 
 cc_library(
     name = "pair_visitor",
@@ -36,7 +37,7 @@ cc_library(name = "frozen", hdrs = ["frozen.h"], deps = ["//core:thread", ":comm
 cc_library(
     name = "level",
     hdrs = ["level.h"],
-    deps = [":cell", ":state", ":common"],
+    deps = [":cell", ":boxes", ":common"],
 )
 
 cc_library(
