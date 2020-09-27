@@ -1,5 +1,5 @@
 #pragma once
-#include "core/matrix.h"
+#include "sokoban/common.h"
 /**
  * An implementation of the O(n^3) Hungarian method for the minimum cost assignment problem
  * (maximum value matching can be computed by subtracting each value from the minimum value).
@@ -22,16 +22,16 @@ struct Hungarian {
 
     matrix<uchar> primes;
     matrix<uchar> stars;
-    std::vector<uchar> rowsCovered;
-    std::vector<uchar> colsCovered;
-    std::vector<int> result;
-    std::vector<int> primeLocations;
-    std::vector<int> starLocations;
+    vector<uchar> rowsCovered;
+    vector<uchar> colsCovered;
+    vector<int> result;
+    vector<int> primeLocations;
+    vector<int> starLocations;
 
    public:
-    // Note: costs must be range [0, std::numeric_limits<int>::max() / 2]
+    // Note: costs must be range [0, numeric_limits<int>::max() / 2]
     Hungarian(int dim) : dim(dim) {
-        if (dim > std::numeric_limits<short>::max()) THROW(invalid_argument);
+        if (dim > numeric_limits<short>::max()) THROW(invalid_argument);
         costs.resize(dim, dim);
         primes.resize(dim, dim);
         stars.resize(dim, dim);
@@ -48,7 +48,7 @@ struct Hungarian {
 
     static int colFromLocation(int loc) { return (loc << 16) >> 16; }
 
-    std::vector<int>& execute() {
+    vector<int>& execute() {
         resetPrimes();
         subtractRowColMins();
         findStars();             // O(n^2)
@@ -84,7 +84,7 @@ struct Hungarian {
     }
 
     // the starred 0's in each column are the assignments. O(n^2)
-    std::vector<int>& starsToAssignments() {
+    vector<int>& starsToAssignments() {
         for (int j = 0; j < dim; j++) result[j] = findStarRowInCol(j);  // O(n)
         return result;
     }
@@ -121,7 +121,7 @@ struct Hungarian {
      */
     void minUncoveredRowsCols() {
         // find min uncovered value
-        int minUncovered = std::numeric_limits<int>::max();
+        int minUncovered = numeric_limits<int>::max();
         for (int i = 0; i < dim; i++)
             if (!rowsCovered[i])
                 for (int j = 0; j < dim; j++)
@@ -193,7 +193,7 @@ struct Hungarian {
         doStarLocations(primeLocations, primeLocationsSize);
     }
 
-    void doStarLocations(std::vector<int>& locations, int size) {
+    void doStarLocations(vector<int>& locations, int size) {
         for (int k = 0; k < size; k++) {
             int row = rowFromLocation(locations[k]);
             int col = colFromLocation(locations[k]);
@@ -201,7 +201,7 @@ struct Hungarian {
         }
     }
 
-    void unStarLocations(std::vector<int>& locations, int size) {
+    void unStarLocations(vector<int>& locations, int size) {
         for (int k = 0; k < size; k++) {
             int row = rowFromLocation(locations[k]);
             int col = colFromLocation(locations[k]);
@@ -251,7 +251,7 @@ struct Hungarian {
 
     void subtractRowColMins() {
         for (int i = 0; i < dim; i++) {  // for each row
-            int rowMin = std::numeric_limits<int>::max();
+            int rowMin = numeric_limits<int>::max();
             for (int j = 0; j < dim; j++)  // grab the smallest element in that row
                 if (costs(i, j) < rowMin) rowMin = costs(i, j);
             for (int j = 0; j < dim; j++)  // subtract that from each element
@@ -259,7 +259,7 @@ struct Hungarian {
         }
 
         for (int j = 0; j < dim; j++) {
-            int colMin = std::numeric_limits<int>::max();
+            int colMin = numeric_limits<int>::max();
             for (int i = 0; i < dim; i++)  // grab the smallest element in that column
                 if (costs(i, j) < colMin) colMin = costs(i, j);
             for (int i = 0; i < dim; i++)  // subtract that from each element

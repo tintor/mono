@@ -30,6 +30,7 @@ using std::string_view;
 using std::string;
 using std::priority_queue;
 using std::atomic;
+using std::numeric_limits;
 
 #include "core/array_deque.h"
 

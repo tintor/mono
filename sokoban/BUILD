@@ -61,7 +61,7 @@ cc_library(
 cc_library(
     name = "heuristic",
     hdrs = ["heuristic.h"],
-    deps = [":hungarian", ":level"],
+    deps = [":hungarian", ":common"],
 )
 
 cc_library(
