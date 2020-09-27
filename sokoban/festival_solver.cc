@@ -187,7 +187,7 @@ struct FestivalSolver {
 
     void Enqueue(Queued queued) {
         Features features = TIMER(ComputeFeatures(level->cells[queued.state.agent], queued.state.boxes), counters.features_ticks);
-        TIMER(fs_queues[features].push(std::move(queued)), counters.queue_push_ticks);
+        TIMER(fs_queues[features].push(std::move(queued)), counters.queue_ticks);
     }
 
     ulong NumOpen() const {
@@ -227,14 +227,14 @@ struct FestivalSolver {
 
             for (auto it = fs_queues.begin(); it != fs_queues.end();) {
                 auto& queue = it->second;
-                if (queue.empty()) { it = TIMER(fs_queues.erase(it), counters.queue_pop_ticks); continue; }
+                if (queue.empty()) { it = TIMER(fs_queues.erase(it), counters.queue_ticks); continue; }
 
                 Queued queued = queue.top();
-                TIMER(queue.pop(), counters.queue_pop_ticks);
+                TIMER(queue.pop(), counters.queue_ticks);
 
                 const State& s = queued.state;
-                if (closed_states.contains(s)) { it++; continue; }
-                TIMER(closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance}), counters.state_insert_ticks);
+                if (TIMER(closed_states.contains(s), counters.state_ticks)) { counters.duplicates += 1; it++; continue; }
+                TIMER(closed_states.emplace(s, Closed{.prev = queued.prev, .distance = queued.distance}), counters.state_ticks);
 
                 if (goals.contains(s.boxes)) {
                     counters.total_ticks += prev_ts.elapsed();
@@ -250,13 +250,13 @@ struct FestivalSolver {
                 TIMER(corrals.find_unsolved_picorral(s), counters.corral_ticks);
                 for_each_push(level, s, [&](const Cell* a, const Cell* b, int d) {
                     const Cell* c = b->dir(d);
-                    if (TIMER(corrals.has_picorral() && !corrals.picorral()[c->id], counters.corral2_ticks)) { counters.corral_cuts += 1; return; }
+                    if (TIMER(corrals.has_picorral() && !corrals.picorral()[c->id], counters.corral_ticks)) { counters.corral_cuts += 1; return; }
 
                     State ns(b->id, s.boxes);
                     ns.boxes.move(b, c);
                     TIMER(normalize(level, &ns.agent, ns.boxes), counters.norm_ticks);
 
-                    if (closed_states.contains(ns)) { counters.duplicates += 1; return; }
+                    if (TIMER(closed_states.contains(ns), counters.state_ticks)) { counters.duplicates += 1; return; }
                     if (deadlock_db.is_deadlock(ns.agent, ns.boxes, c, counters)) return;
 
                     Enqueue({.state = std::move(ns), .prev = s, .distance = ushort(queued.distance + 1)});

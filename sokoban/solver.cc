@@ -387,7 +387,7 @@ struct Solver {
                 queue.push(ns, uint(qs->distance) * options.dist_w + uint(qs->heuristic) * options.heur_w);
                 q.updates += 1;
             }
-            q.states_query_ticks += states_query_ts.elapsed();
+            q.state_ticks += states_query_ts.elapsed();
             return true;
         }
 
@@ -397,7 +397,7 @@ struct Solver {
         nsi.distance = si.distance + 1;
 
         Timestamp heuristic_ts;
-        q.states_query_ticks += states_query_ts.elapsed(heuristic_ts);
+        q.state_ticks += states_query_ts.elapsed(heuristic_ts);
 
         // TODO holding lock while computing heuristic!
         uint h = heuristic(level, ns.boxes);
@@ -422,7 +422,7 @@ struct Solver {
         q.state_insert_ticks += state_insert_ts.elapsed(queue_push_ts);
 
         queue.push(ns, int(nsi.distance) * options.dist_w + int(nsi.heuristic) * options.heur_w);
-        q.queue_push_ticks += queue_push_ts.elapsed();
+        q.queue_ticks += queue_push_ts.elapsed();
 
         if (options.debug) {
             print("child:\n");
@@ -486,7 +486,7 @@ struct Solver {
                 // -> if that doesn't work then do a regular search
 
                 Timestamp corral_ts;
-                q.queue_pop_ticks += queue_pop_ts.elapsed(corral_ts);
+                q.queue_ticks += queue_pop_ts.elapsed(corral_ts);
                 ws.corrals.find_unsolved_picorral(s);
                 q.corral_ticks += corral_ts.elapsed();
 

@@ -17,19 +17,17 @@ struct Counters {
     T updates = 0;
 
     // main ticks
-    T queue_pop_ticks = 0;
+    T queue_ticks = 0;
     T corral_ticks = 0;
-    T corral2_ticks = 0;
+    T state_ticks = 0;
     T is_simple_deadlock_ticks = 0;
     T db_contains_pattern_ticks = 0;
     T contains_frozen_boxes_ticks = 0;
     T pattern_matches_ticks = 0;
     T bipartite_ticks = 0;
     T norm_ticks = 0;
-    T states_query_ticks = 0;
     T heuristic_ticks = 0;
     T state_insert_ticks = 0;
-    T queue_push_ticks = 0;
     T features_ticks = 0;
     T pattern_add_ticks = 0;
     T contains_box_blocked_goals_ticks = 0;
@@ -40,19 +38,16 @@ struct Counters {
 
     ulong else_ticks() const {
         ulong a = total_ticks;
-        a -= queue_pop_ticks;
+        a -= queue_ticks;
+        a -= state_ticks;
         a -= corral_ticks;
-        a -= corral2_ticks;
         a -= is_simple_deadlock_ticks;
         a -= db_contains_pattern_ticks;
         a -= contains_frozen_boxes_ticks;
         a -= pattern_matches_ticks;
         a -= bipartite_ticks;
         a -= norm_ticks;
-        a -= states_query_ticks;
         a -= heuristic_ticks;
-        a -= state_insert_ticks;
-        a -= queue_push_ticks;
         a -= features_ticks;
         a -= pattern_add_ticks;
         a -= contains_box_blocked_goals_ticks;
@@ -68,21 +63,18 @@ struct Counters {
 
     void print() const {
         bool first = true;
-        tick("queue_pop", queue_pop_ticks, &first);
+        tick("queue", queue_ticks, &first);
+        tick("state", state_ticks, &first);
         tick("corral", corral_ticks, &first);
-        tick("corral2", corral2_ticks, &first);
         tick("is_simple_deadlock", is_simple_deadlock_ticks, &first);
-        tick("db_contains_pattern", db_contains_pattern_ticks, &first);
+        tick("contains_pattern", db_contains_pattern_ticks, &first);
         tick("contains_frozen_boxes", contains_frozen_boxes_ticks, &first);
         tick("cfb: pattern_match", pattern_matches_ticks, &first);
         tick("cfb: box_blocked_goals", contains_box_blocked_goals_ticks, &first);
-        tick("cfb: add", pattern_add_ticks, &first);
+        tick("cfb: add_pattern", pattern_add_ticks, &first);
         tick("bipartite", bipartite_ticks, &first);
         tick("norm", norm_ticks, &first);
-        tick("states_query", states_query_ticks, &first);
         tick("heuristic", heuristic_ticks, &first);
-        tick("state_insert", state_insert_ticks, &first);
-        tick("queue_push", queue_push_ticks, &first);
         tick("features", features_ticks, &first);
         tick("else", else_ticks(), &first);
 
