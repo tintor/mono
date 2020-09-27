@@ -3,10 +3,16 @@
 #include "sokoban/level.h"
 
 struct AgentBoxVisitor : public each<AgentBoxVisitor> {
+    AgentBoxVisitor() : _level(nullptr) {}
     AgentBoxVisitor(const Level* level) : _level(level), _visitor(level->cells.size(), level->num_alive) {}
 
     bool add(const Cell* a, const Cell* b) {
         return _visitor.add(a->id, b->id);
+    }
+
+    void clear(const Level* level) {
+        _level = level;
+        _visitor.clear(level->cells.size(), level->num_alive);
     }
 
     void clear() {

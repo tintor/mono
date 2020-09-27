@@ -1,4 +1,5 @@
 #pragma once
+#include <random>
 #include "sokoban/util.h"
 #include "sokoban/level.h"
 #include "sokoban/pair_visitor.h"
@@ -30,8 +31,37 @@ bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, co
 }
 
 template <typename Boxes>
-bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen, AgentBoxVisitor& visitor) {
+bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen) {
+    static mutex m;
+    unique_lock lock(m);
+
     const Level* level = agent->level;
+    static AgentBoxVisitor visitor;
+    visitor.clear(level);
+
+    struct Key {
+        int agent;
+        Boxes non_frozen;
+        Boxes frozen;
+
+        bool operator==(const Key& o) const { return agent == o.agent && non_frozen == o.non_frozen && frozen == o.frozen; }
+    };
+
+    struct Hash {
+        size_t operator()(const Key& o) const {
+            size_t seed = fmix64(o.agent);
+            seed ^= o.non_frozen.hash() + 0x9e3779b9 + (seed<<6) + (seed>>2);
+            seed ^= o.frozen.hash() + 0x9e3779b9 + (seed<<6) + (seed>>2);
+            return seed;
+        }
+    };
+
+    static flat_hash_map<Key, bool, Hash> cache;
+    Key key{agent->id, non_frozen, frozen};
+
+    auto it = cache.find(key);
+    if (it != cache.end()) return it->second;
+
     for (Cell* g : level->goals()) {
         if (frozen[g->id]) continue;
 
@@ -56,8 +86,13 @@ bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, cons
             }
         }
 
-        if (!goal_reachable) return true;
+        if (!goal_reachable) {
+            cache.emplace(std::move(key), true);
+            return true;
+        }
     }
+
+    cache.emplace(std::move(key), false);
     return false;
 }
 
@@ -204,7 +239,7 @@ class DeadlockDB {
     constexpr static int WordBits = sizeof(Word) * 8;
 
 public:
-    DeadlockDB(const Level* level) : _level(level), _agent_box_visitor(level), _patterns(level) {
+    DeadlockDB(const Level* level) : _level(level), _patterns(level) {
 
     }
 
@@ -262,20 +297,23 @@ public:
             return true;
         }
 
-        if (TIMER(is_bipartite_deadlock(agent, boxes), q.bipartite_ticks)) {
+        if (TIMER(use_bipartite() && is_bipartite_deadlock(agent, boxes), q.bipartite_ticks)) {
+            q.bipartite_deadlocks += 1;
+            _use_bipartite.store(true, std::memory_order_relaxed);
             return true;
         }
         return false;
     }
 
+    // TODO ignore frozen boxes (as they can't move and other boxes can't use their goals)
     bool is_bipartite_deadlock(const int agent, const Boxes& boxes) const {
         BipartiteGraph graph;
         graph.reset(_level->num_goals, _level->num_goals);
         int num_boxes = 0;
         for (const Cell* b : _level->alive()) {
             if (boxes[b]) {
-                for (int i = 0; i < _level->num_goals; i++) {
-                    graph.add_edge(num_boxes + 1, i + 1);
+                for (int g = 0; g < _level->num_goals; g++) {
+                    if (b->push_distance[g] != Cell::Inf) graph.add_edge(num_boxes + 1, g + 1);
                 }
                 num_boxes += 1;
             }
@@ -404,13 +442,28 @@ private:
 
         if (!solved(agent->level, boxes)) return {Result::Frozen, 5};
         if (!all_empty_goals_are_reachable(_level, visitor, boxes)) return {Result::BlockedGoal, 6};
-        if (TIMER(contains_box_blocked_goals(agent, orig_boxes, boxes, _agent_box_visitor), q.contains_box_blocked_goals_ticks)) return {Result::PushBlockedGoal, 7};
+        if (TIMER(use_box_blocked_goals() && contains_box_blocked_goals(agent, orig_boxes, boxes), q.contains_box_blocked_goals_ticks)) {
+            _use_box_blocked_goals.store(true, std::memory_order_relaxed);
+            return {Result::PushBlockedGoal, 7};
+        }
         return {Result::NotFrozen, 8};
     }
 
+    bool use_box_blocked_goals() {
+        return _use_box_blocked_goals || ++_random_box_blocked_goals % 512 == 0;
+    }
+
+    bool use_bipartite() {
+        return _use_bipartite || ++_random_bipartite % 512 == 0;
+    }
+
 private:
+    atomic<int> _random_box_blocked_goals = 0;
+    atomic<int> _random_bipartite = 0;
+    atomic<bool> _use_box_blocked_goals = false;
+    atomic<bool> _use_bipartite = false;
+
     const Level* _level;
-    AgentBoxVisitor _agent_box_visitor;
     mutex _add_mutex;
     Patterns _patterns;
 };

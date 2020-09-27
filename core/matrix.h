@@ -20,6 +20,14 @@ class matrix {
         _data.resize(rows * cols);
     }
 
+    void resize_and_fill(int rows, int cols, T value) {
+        if (rows < 0 || cols < 0) THROW(invalid_argument);
+        _dim_a = rows;
+        _dim_b = cols;
+        _data.clear();
+        _data.resize(rows * cols, value);
+    }
+
     void fill(T value) {
         auto s = _data.size();
         _data.resize(0);
