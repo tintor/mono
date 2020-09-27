@@ -10,7 +10,7 @@ cc_library(
     ],
 )
 
-library(name = "maximum_matching", deps = [":common"])
+library(name = "maximum_matching", srcs = ["maximum_matching.cc"], deps = [":common"])
 
 cc_library(
     name = "level_env",
