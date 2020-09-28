@@ -30,6 +30,7 @@ bool all_empty_goals_are_reachable(const Level* level, AgentVisitor& visitor, co
     return true;
 }
 
+// TODO simple heuristic: if goal is in tunnel (with bend) made of walls and frozen boxes, then goal is blocked
 template <typename Boxes>
 bool contains_box_blocked_goals(const Cell* agent, const Boxes& non_frozen, const Boxes& frozen) {
     static mutex m;
