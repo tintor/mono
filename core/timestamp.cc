@@ -1,13 +1,14 @@
 #include <unistd.h>
 #include <chrono>
+#include <cmath>
 
 #include "core/timestamp.h"
 #include "core/algorithm.h"
 
 double Timestamp::_ms_per_tick = std::numeric_limits<double>::signaling_NaN();
 
-static struct Init {
-    Init() { Timestamp::init(); }
+static struct TimestampInit {
+    TimestampInit() { Timestamp::init(); }
 } init;
 
 void Timestamp::init() {

@@ -115,7 +115,6 @@ string Solve(string_view file, const Options& options) {
 
 int main(int argc, char** argv) {
     InitSegvHandler();
-    Timestamp::init();
 
     Options options;
     po::options_description desc("Allowed options");

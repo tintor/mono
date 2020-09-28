@@ -11,14 +11,15 @@ struct Timestamp {
     double elapsed_s(Timestamp a = Timestamp()) const { return elapsed(a) * _ms_per_tick * 1e-3; }
     double elapsed_ms(Timestamp a = Timestamp()) const { return elapsed(a) * _ms_per_tick; }
 
-    static void init();
-
     static double to_s(ulong ticks) { return ticks * _ms_per_tick * 1e-3; }
     static double ms_per_tick() { return _ms_per_tick; }
 
     ulong ticks() const { return _ticks; }
 
    private:
+    friend struct TimestampInit;
+    static void init();
+
     ulong _ticks;
     static double _ms_per_tick;
 };
