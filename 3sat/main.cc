@@ -36,8 +36,7 @@ void Print(const Vars& solution) {
     print("\n");
 }
 
-
-bool Consistent(int vars, int a, Vars& solution) {
+/*bool Consistent(int vars, int a, Vars& solution) {
     if (abs(a) > vars) return true;
     if (1 <= a && a <= vars && solution[a - 1] > 0) return true;
     if (-1 >= a && a >= -vars && solution[-a - 1] < 0) return true;
@@ -86,7 +85,7 @@ Vars Solve(const Terms& problem, int vars) {
 size_t NumSolutions(const Terms& problem, int vars) {
     Vars solution(vars);
     return CountRecurse(0, vars, problem, solution);
-}
+}*/
 
 // ---------------------------------------------
 
@@ -144,6 +143,12 @@ optional<Entry> MakeEntry(int m, const Terms& terms, const Vars& solution) {
     return e;
 }
 
+// TODO alternative queue orders: smallest number of terms of size 3
+// TODO alternative heuristics for selecting M smartly (cycle through different heuristics)
+// TODO before push: if any literal is only positive OR only negative: remove terms in-place
+// TODO before push: sort and remove dups
+// TODO before push: if there are all 4 combinations of two literals at size 2 term => UNSAT
+// TODO before push: if there are only 3 combinations of two literals at size 2 term => simplify in-place
 Vars SolveWithQueue(const Terms& problem, int vars) {
     const auto cmp = [](const Entry& a, const Entry& b) {
         return b.terms.size() < a.terms.size();
@@ -213,6 +218,13 @@ int RandVar(int vars, std::mt19937& generator) {
     return dist(generator) * (dist2(generator) * 2 - 1);
 }
 
+bool HasDuplicate(const Terms& problem) {
+    for (int i = 0; i < problem.size() - 1; i++) {
+        if (problem[i] == problem.back()) return true;
+    }
+    return false;
+}
+
 Terms GenerateTerms(int vars, int terms) {
     Terms problem(terms);
     std::random_device device;
@@ -223,7 +235,7 @@ Terms GenerateTerms(int vars, int terms) {
         while (a == b || a == -b) b = RandVar(vars, generator);
 
         c = RandVar(vars, generator);
-        while (a == c || a == -c || b == c || b == -c) c = RandVar(vars, generator);
+        while (a == c || a == -c || b == c || b == -c || HasDuplicate(problem)) c = RandVar(vars, generator);
     }
     return problem;
 }
@@ -247,13 +259,6 @@ bool IsValidSolution(const Terms& problem, const Vars& solution) {
         return false;
     }
     return true;
-}
-
-bool HasDuplicate(const Terms& problem) {
-    for (int i = 0; i < problem.size() - 1; i++) {
-        if (problem[i] == problem.back()) return true;
-    }
-    return false;
 }
 
 Terms GenerateTermsWithSolution(int vars, int terms) {
@@ -290,19 +295,13 @@ Terms GenerateTermsWithSolution(int vars, int terms) {
     return problem;
 }
 
-// Simple recursive solver: 100 random problems (with solution) with 47 vars (and x4.25 terms) in 3.3s on average
-// Simple recursive solver: 100 random problems (dup removal + 3flip) (with solution) with 47 vars (and x4.25 terms) in 4.1s on average
-
 // 250 -> 21s
 int main(int argc, char* argv[]) {
     InitSegvHandler();
     int vars = 300;
     ulong ticks = 0;
     for (int i = 1; i <= 100; i++) {
-        //auto p = GenerateTerms(vars, vars * 4.25);
         auto problem = GenerateTermsWithSolution(vars, vars * 4.25);
-        //print("Terms:\n");
-        //Print(problem);
 
         Timestamp start;
         auto solution = SolveWithQueue(problem, vars);
