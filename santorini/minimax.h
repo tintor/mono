@@ -12,15 +12,16 @@
 
 const double kInfinity = std::numeric_limits<double>::infinity();
 
-template<typename Player, typename State, typename Action, typename StateEnumeratorFn, typename ValueFn>
+template<typename Player, typename State, typename Action, typename IsTerminalFn, typename StateEnumeratorFn, typename ValueFn>
 struct MiniMaxCommon {
+    const IsTerminalFn& is_terminal;
     const StateEnumeratorFn& state_enumerator;
     const ValueFn& value;
     Player player;
 
     // Return value of <initial_state>, from the perspective of <player>.
     double TreeValue(const State& initial_state, const int depth, const bool maximize, double alpha, double beta) {
-        if (depth == 0) return value(player, initial_state);
+        if (depth == 0 || is_terminal(initial_state)) return value(player, initial_state);
 
         // TODO In Santorini, if no action is possible for maximizing player that is considered defeat. It is accidental here that -inf will be returned in that case.
         double best_m = maximize ? -kInfinity : kInfinity;
@@ -28,7 +29,7 @@ struct MiniMaxCommon {
         // TODO sort states by value (alpha-beta will take care of short-circuiting)
 
         for (const State& state : states) {
-            double m = IsTerminal(state) ? value(player, state) : TreeValue(state, depth - 1, !maximize, alpha, beta);
+            const double m = TreeValue(state, depth - 1, !maximize, alpha, beta);
             if (maximize) {
                 if (m > best_m) best_m = m;
                 if (best_m > alpha) alpha = best_m;
@@ -44,11 +45,18 @@ struct MiniMaxCommon {
 };
 
 // Return action with the highest value (also return the value), from the perspective of <next_player>.
-template<typename Player, typename State, typename Action, typename StateEnumeratorFn, typename StateActionEnumeratorFn, typename ValueFn>
-std::pair<Action, double> MiniMax(const Player& next_player, const State& initial_state, const int depth, const StateEnumeratorFn& state_enumerator, const StateActionEnumeratorFn& state_action_enumerator, const ValueFn& value) {
+template<typename Player, typename State, typename Action, typename IsTerminalFn, typename StateEnumeratorFn, typename StateActionEnumeratorFn, typename ValueFn>
+std::pair<Action, double> MiniMax(
+        const Player& next_player,
+        const State& initial_state,
+        const int depth,
+        const IsTerminalFn& is_terminal,
+        const StateEnumeratorFn& state_enumerator,
+        const StateActionEnumeratorFn& state_action_enumerator,
+        const ValueFn& value) {
     Action best_action;
     double best_score = -kInfinity;
-    MiniMaxCommon common{state_enumerator, value, next_player};
+    MiniMaxCommon common{is_terminal, state_enumerator, value, next_player};
     state_action_enumerator(initial_state, [&](const State& state, const Action& action) {
         double m = common.TreeValue(state, depth, /*maximize*/false, -kInfinity, kInfinity);
         if (m > best_score) {
