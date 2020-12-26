@@ -65,6 +65,6 @@ boost_deps()
 
 new_local_repository(
     name = "freetype2",
-    path = "/opt/X11/include/freetype2",
+    path = "/usr/local/Cellar/freetype/2.10.3/include/freetype2",
     build_file = "@//:freetype2.BUILD",
 )
