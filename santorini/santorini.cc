@@ -105,20 +105,20 @@ optional<string_view> Build(Board& board, Coord dest, bool dome) {
     return nullopt;
 }
 
-optional<string_view> CanExecute(const Board& board, const Action& action) {
+optional<string_view> CanExecute(const Board& board, const Step& step) {
     return std::visit(
-        overloaded{[&](NextAction a) { return CanNext(board); }, [&](PlaceAction a) { return CanPlace(board, a.dest); },
-                   [&](MoveAction a) { return CanMove(board, a.src, a.dest); },
-                   [&](BuildAction a) { return CanBuild(board, a.dest, a.dome); }},
-        action);
+        overloaded{[&](NextStep a) { return CanNext(board); }, [&](PlaceStep a) { return CanPlace(board, a.dest); },
+                   [&](MoveStep a) { return CanMove(board, a.src, a.dest); },
+                   [&](BuildStep a) { return CanBuild(board, a.dest, a.dome); }},
+        step);
 }
 
-optional<string_view> Execute(Board& board, const Action& action) {
+optional<string_view> Execute(Board& board, const Step& step) {
     return std::visit(
-        overloaded{[&](NextAction a) { return Next(board); }, [&](PlaceAction a) { return Place(board, a.dest); },
-                   [&](MoveAction a) { return Move(board, a.src, a.dest); },
-                   [&](BuildAction a) { return Build(board, a.dest, a.dome); }},
-        action);
+        overloaded{[&](NextStep a) { return Next(board); }, [&](PlaceStep a) { return Place(board, a.dest); },
+                   [&](MoveStep a) { return Move(board, a.src, a.dest); },
+                   [&](BuildStep a) { return Build(board, a.dest, a.dome); }},
+        step);
 }
 
 bool IsMoveBlocked(const Board& board) {
@@ -215,53 +215,53 @@ Coord MyRandomFigure(const Board& board, std::mt19937_64& random) {
     return out;
 }
 
-Action RandomAction(const Board& board) {
+Step RandomStep(const Board& board) {
     std::mt19937_64& random = Random();
     if (board.setup) {
         int c = RandomInt(1 + 8, random);
-        if (c == 0) return NextAction{};
-        return PlaceAction{Coord::Random(random)};
+        if (c == 0) return NextStep{};
+        return PlaceStep{Coord::Random(random)};
     }
 
     int c = RandomInt(1 + 2 * 4, random);
-    if (c == 0) return NextAction{};
-    if (c <= 4) return MoveAction{MyRandomFigure(board, random), Coord::Random(random)};
-    return BuildAction{Coord::Random(random), bool(RandomInt(2, random))};
+    if (c == 0) return NextStep{};
+    if (c <= 4) return MoveStep{MyRandomFigure(board, random), Coord::Random(random)};
+    return BuildStep{Coord::Random(random), bool(RandomInt(2, random))};
 }
 
 template <typename Visitor>
-bool Visit(const Board& board, const Action& action, const Visitor& visit) {
+bool Visit(const Board& board, const Step& step, const Visitor& visit) {
     Board my_board = board;
-    if (Execute(my_board, action) != nullopt) return true;
-    return visit(my_board, action);
+    if (Execute(my_board, step) != nullopt) return true;
+    return visit(my_board, step);
 }
 
 #define VISIT(A) \
     if (!Visit(board, A, visit)) return false;
 
 template <typename Visitor>
-bool AllValidActions(const Board& board, const Visitor& visit) {
-    VISIT(NextAction{});
+bool AllValidSteps(const Board& board, const Visitor& visit) {
+    VISIT(NextStep{});
     if (board.setup) {
-        for (Coord e : kAll) VISIT(PlaceAction{e});
+        for (Coord e : kAll) VISIT(PlaceStep{e});
         return true;
     }
     for (Coord e : kAll) {
         if (board(e).figure == board.player) {
             for (Coord d : kAll)
-                if (d != e) VISIT((MoveAction{e, d}));
+                if (d != e) VISIT((MoveStep{e, d}));
         }
     }
     for (bool dome : {false, true})
-        for (Coord e : kAll) VISIT((BuildAction{e, dome}));
+        for (Coord e : kAll) VISIT((BuildStep{e, dome}));
     return true;
 }
 
 bool IsEndOfTurn(const Board& board) {
     bool next = false;
     bool other = false;
-    AllValidActions(board, [&](const Board& new_board, const Action& action) {
-        if (std::holds_alternative<NextAction>(action))
+    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
+        if (std::holds_alternative<NextStep>(step))
             next = true;
         else
             other = true;
@@ -271,45 +271,45 @@ bool IsEndOfTurn(const Board& board) {
 }
 
 template <typename Visitor>
-bool AllValidActionSequences(const Board& board, vector<Action>& temp, const Visitor& visit) {
-    return AllValidActions(board, [&](const Board& new_board, const Action& action) {
-        temp.push_back(action);
+bool AllValidStepSequences(const Board& board, Action& temp, const Visitor& visit) {
+    return AllValidSteps(board, [&](const Board& new_board, const Step& step) {
+        temp.push_back(step);
         auto winner = Winner(new_board);
-        if (std::holds_alternative<NextAction>(action) || winner != Figure::None) {
+        if (std::holds_alternative<NextStep>(step) || winner != Figure::None) {
             if (!visit(temp, new_board, winner)) return false;
         } else {
-            if (!AllValidActionSequences(new_board, temp, visit)) return false;
+            if (!AllValidStepSequences(new_board, temp, visit)) return false;
         }
         temp.pop_back();
         return true;
     });
 }
 
-bool IsValid(const Board& board, const Action& action) {
+bool IsValid(const Board& board, const Step& step) {
     Board my_board = board;
-    return Execute(my_board, action) == nullopt;
+    return Execute(my_board, step) == nullopt;
 }
 
-Action AutoRandom(const Board& board) {
+Step AutoRandom(const Board& board) {
     while (true) {
-        Action action = RandomAction(board);
-        if (IsValid(board, action)) return action;
+        Step step = RandomStep(board);
+        if (IsValid(board, step)) return step;
     }
 }
 
-Action AutoGreedy(const Board& board) {
+Step AutoGreedy(const Board& board) {
     auto& random = Random();
-    vector<Action> temp;
-    Action choice;
+    Action temp;
+    Step choice;
     ReservoirSampler sampler;
-    AllValidActionSequences(board, temp, [&](const vector<Action>& actions, const Board& new_board, Figure winner) {
-        // Print(actions);
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
+        // Print(action);
         if (winner == board.player) {
-            choice = actions[0];
+            choice = action[0];
             sampler.count = 1;
             return false;
         }
-        if (winner == Figure::None && sampler(random)) choice = actions[0];
+        if (winner == Figure::None && sampler(random)) choice = action[0];
         return true;
     });
     Check(sampler.count > 0);
@@ -330,20 +330,20 @@ double ClimbRank(Figure player, const Board& board) {
 // Heuristics to use:
 // - points for every worker which is not blocked
 // - number of free cells around every worker (if they are not too tall)
-// - number of squares that my workers can reach in 1 step that opponent's workers can't reach in 2 steps? (breaks for Artemis and Hermes)
+// - number of squares that my workers can reach in 1 step that opponent's workers can't reach in 2 action? (breaks for Artemis and Hermes)
 // - number of non-domed and non-occupied levels within 1 step from my workers
-// - number of non-domed and non-occupied levels within 2 steps from my workers (that were not included in above)
+// - number of non-domed and non-occupied levels within 2 action from my workers (that were not included in above)
 
-Action AutoClimber(const Board& board) {
+Step AutoClimber(const Board& board) {
     auto& random = Random();
-    vector<Action> temp;
-    Action choice;
+    Action temp;
+    Step choice;
     ReservoirSampler sampler;
     double best_rank = -1e100;
-    AllValidActionSequences(board, temp, [&](const vector<Action>& actions, const Board& new_board, Figure winner) {
-        // Print(actions);
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
+        // Print(action);
         if (winner == board.player) {
-            choice = actions[0];
+            choice = action[0];
             best_rank = 1e100;
             sampler.count = 1;
             return false;
@@ -351,10 +351,10 @@ Action AutoClimber(const Board& board) {
         if (winner != Figure::None) return true;
 
         double rank = ClimbRank(board.player, new_board);
-        if (rank == best_rank && sampler(random)) choice = actions[0];
+        if (rank == best_rank && sampler(random)) choice = action[0];
         if (rank > best_rank) {
             best_rank = rank;
-            choice = actions[0];
+            choice = action[0];
             sampler.count = 1;
         }
         return true;
@@ -366,23 +366,23 @@ Action AutoClimber(const Board& board) {
 size_t Rollout(Figure player, Board board) {
     auto& random = Random();
     while (true) {
-        // Select action uniformly out of all possible actions!
-        Action random_action;
+        // Select step uniformly out of all possible action!
+        Step random_step;
         ReservoirSampler sampler;
-        AllValidActions(board, [&](const Board& new_board, const Action& action) {
-            if (sampler(random)) random_action = action;
+        AllValidSteps(board, [&](const Board& new_board, const Step& step) {
+            if (sampler(random)) random_step = step;
             return true;
         });
 
-        Check(Execute(board, random_action) == nullopt);
+        Check(Execute(board, random_step) == nullopt);
         auto w = Winner(board);
         if (w != Figure::None) return (w == player) ? 1 : 0;
     }
 }
 
 struct Node {
-    Action action;
-    Board board;  // board state post-action
+    Step step;
+    Board board;  // board state post-step
     Figure winner;
     size_t w = 0;  // number of wins
     size_t n = 0;  // total number of rollouts (w/n is win ratio)
@@ -405,9 +405,9 @@ size_t ChooseChild(size_t N, const vector<std::unique_ptr<Node>>& children) {
 }
 
 void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
-    AllValidActions(board, [&](const Board& new_board, const Action& action) {
+    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
         auto node = std::make_unique<Node>();
-        node->action = action;
+        node->step = step;
         node->board = new_board;
         node->winner = Winner(new_board);
         out.push_back(std::move(node));
@@ -448,36 +448,36 @@ size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node) {
     return e;
 }
 
-optional<Action> TrivialAction(const Board& board) {
-    optional<Action> trivial_action;
+optional<Step> TrivialStep(const Board& board) {
+    optional<Step> trivial_step;
     size_t count = 0;
-    vector<Action> temp;
+    Action temp;
     bool done = false;
-    AllValidActionSequences(board, temp, [&](const vector<Action>& actions, const Board& new_board, Figure winner) {
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
         Check(!done);
         if (winner == board.player) {
-            trivial_action = actions[0];
+            trivial_step = action[0];
             done = true;
             return false;
         }
         if (winner != Figure::None) return true;
         // TODO check if opponent can win in one sequence!
-        trivial_action = (count == 0) ? optional{actions[0]} : nullopt;
+        trivial_step = (count == 0) ? optional{action[0]} : nullopt;
         count += 1;
         return true;
     });
-    return trivial_action;
+    return trivial_step;
 }
 
-Action AutoMCTS(const Board& board, const size_t iterations, const bool trivial = false) {
+Step AutoMCTS(const Board& board, const size_t iterations, const bool trivial = false) {
     if (trivial) {
-        auto a = TrivialAction(board);
+        auto a = TrivialStep(board);
         if (a) return *a;
     }
 
     vector<std::unique_ptr<Node>> children;
     Expand(board, children);
-    if (children.size() == 1) return children[0]->action;
+    if (children.size() == 1) return children[0]->step;
 
     for (size_t i = 0; i < iterations; i++) {
         size_t ci = ChooseChild(i, children);
@@ -493,14 +493,14 @@ Action AutoMCTS(const Board& board, const size_t iterations, const bool trivial 
             best_i = i;
         }
     }
-    return children[best_i]->action;
+    return children[best_i]->step;
 }
 
 double MiniMax(Figure player, const Board& board, int depth) {
     if (depth == 0) return ClimbRank(player, board);
 
     double best_m = (board.player == player) ? -1e100 : 1e100;
-    AllValidActions(board, [&](const Board& new_board, const Action& action) {
+    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
         double m = MiniMax(player, new_board, depth - 1);
         if (board.player == player && m > best_m) best_m = m;
         if (board.player != player && m < best_m) best_m = m;
@@ -509,30 +509,30 @@ double MiniMax(Figure player, const Board& board, int depth) {
     return best_m;
 }
 
-Action AutoMiniMax(const Board& board, const int depth) {
-    Action best_action;
+Step AutoMiniMax(const Board& board, const int depth) {
+    Step best_step;
     size_t count = 0;
-    AllValidActions(board, [&](const Board& new_board, const Action& action) {
-        best_action = action;
+    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
+        best_step = step;
         count += 1;
         return count < 2;
     });
-    if (count == 1) return best_action;
+    if (count == 1) return best_step;
 
     auto& random = Random();
     double best_score = -1e100;
     ReservoirSampler sampler;
-    AllValidActions(board, [&](const Board& new_board, const Action& action) {
+    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
         double m = MiniMax(board.player, new_board, depth);
-        if (m == best_score && sampler(random)) best_action = action;
+        if (m == best_score && sampler(random)) best_step = step;
         if (m > best_score) {
             count = 1;
-            best_action = action;
+            best_step = step;
             best_score = m;
         }
         return true;
     });
-    return best_action;
+    return best_step;
 }
 
 // Human interface
@@ -571,45 +571,45 @@ void Play(optional<string_view> status) {
     }
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mods == GLFW_MOD_SHIFT) {
+void key_callback(GLFWwindow* window, int key, int scancode, int step, int mods) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mods == GLFW_MOD_SHIFT) {
         glfwSetWindowShouldClose(window, GL_TRUE);
         return;
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_SPACE) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_SPACE) {
         g_board_copy = g_board;
         Play(Next(g_board));
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_U) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_U) {
         if (g_history.size() > 0) {
             g_board = g_history.back();
             g_history.pop_back();
         }
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_1) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_1) {
         g_board_copy = g_board;
-        Action action = AutoRandom(g_board);
-        Play(Execute(g_board, action));
+        Step step = AutoRandom(g_board);
+        Play(Execute(g_board, step));
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_2) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_2) {
         g_board_copy = g_board;
-        Action action = AutoGreedy(g_board);
-        Play(Execute(g_board, action));
+        Step step = AutoGreedy(g_board);
+        Play(Execute(g_board, step));
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_3) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_3) {
         g_board_copy = g_board;
-        Action action = AutoClimber(g_board);
-        Play(Execute(g_board, action));
+        Step step = AutoClimber(g_board);
+        Play(Execute(g_board, step));
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_4) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_4) {
         g_board_copy = g_board;
-        Action action = AutoMCTS(g_board, 10000);
-        Play(Execute(g_board, action));
+        Step step = AutoMCTS(g_board, 10000);
+        Play(Execute(g_board, step));
     }
-    if (action == GLFW_PRESS && key == GLFW_KEY_5) {
+    if (step == GLFW_PRESS && key == GLFW_KEY_5) {
         g_board_copy = g_board;
-        Action action = AutoMiniMax(g_board, 12);
-        Play(Execute(g_board, action));
+        Step step = AutoMiniMax(g_board, 12);
+        Play(Execute(g_board, step));
     }
 }
 
@@ -626,8 +626,8 @@ void OnClick(Coord dest, bool left, bool shift) {
     }
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (action == GLFW_PRESS) {
+void mouse_button_callback(GLFWwindow* window, int button, int step, int mods) {
+    if (step == GLFW_PRESS) {
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         int mouse_x = floor(xpos - 100) / 160;
@@ -777,7 +777,7 @@ void Render(const Board& board, View& view) {
 // Benchmarks and training
 // -----------------------
 
-using Policy = std::function<Action(const Board&)>;
+using Policy = std::function<Step(const Board&)>;
 
 Figure Battle(const Policy& policy_a, const Policy& policy_b) {
     Board board;
@@ -839,12 +839,12 @@ void AutoBattle(int count, string_view name_a, string_view name_b) {
 }
 
 struct Agent {
-    virtual vector<Action> Play(const Board& board) = 0;
+    virtual Action Play(const Board& board) = 0;
 };
 
 struct SARS {
     Board state;
-    Board action; // board state after agent's turn, but before opponent's turn (action + state)
+    Board step; // board state after agent's turn, but before opponent's turn (step + state)
     float reward;
     optional<Board> next_state; // board state after opponent's turn (or nullopt if game ends after agent's or opponent's turns)
 };
@@ -930,7 +930,7 @@ private:
 
 // TODO Use Prioritized Replay Buffer (select SARS transitions with the worst fit).
 // TODO Use Double DQN: q1 and q2 (instead of q_policy and q_train), and flip them randomly.
-// TODO Can we use Dueling DQN here (with variable number of actions)?
+// TODO Can we use Dueling DQN here (with variable number of action)?
 class DQNAgent : public Agent {
 public:
     const double boltzmann_tau = 1;
@@ -939,18 +939,18 @@ public:
     bool _explore = true;
 
     // Inference only. No policy improvement or sample collection.
-    vector<Action> Play(const Board& board) override {
+    Action Play(const Board& board) override {
         vector<MiniBoard> all_boards;
-        vector<vector<Action>> all_actions;
+        vector<Action> all_action;
 
-        AllValidActionSequences(board, _temp, [&](vector<Action>& actions, const Board& new_board, auto winner_ignored) {
+        AllValidStepSequences(board, _temp, [&](Action& action, const Board& new_board, auto winner_ignored) {
             all_boards << static_cast<MiniBoard>(new_board);
-            all_actions << actions;
+            all_action << action;
             return true;
         });
 
         if (all_boards.empty()) return {};
-        return all_actions[ChooseAction(_q_policy.Eval(all_boards))];
+        return all_action[ChooseStep(_q_policy.Eval(all_boards))];
     }
 
     // TODO How are transitions collected?
@@ -965,11 +965,11 @@ public:
             _xy.clear();
             // TODO Collect all new boards from double nested loop, and do all evals at once.
             // TODO Parallelize this loop.
-            for (const auto& [state, action, reward, next_state] : _replay_buffer.Sample(sample_size)) {
+            for (const auto& [state, step, reward, next_state] : _replay_buffer.Sample(sample_size)) {
                 float max_q = 0;
                 if (next_state.has_value()) {
                     max_q = -1;
-                    AllValidActionSequences(next_state.value(), _temp, [&](vector<Action>& actions, const Board& new_board, auto winner) {
+                    AllValidStepSequences(next_state.value(), _temp, [&](Action& action, const Board& new_board, auto winner) {
                         if (winner == ego) {
                           max_q = 1;
                         } else if (winner != opponent) {
@@ -979,7 +979,7 @@ public:
                     });
                     // If no possible move then game is lost and max_q == -1.
                 }
-                _xy.emplace_back(static_cast<MiniBoard>(action), reward + gamma * max_q);
+                _xy.emplace_back(static_cast<MiniBoard>(step), reward + gamma * max_q);
             }
             _q_train.Train(_xy); // with Huber loss (quadratic for small errors, linear for large errors)
         }
@@ -989,7 +989,7 @@ public:
     }
 
 private:
-    int ChooseAction(const vector<float>& q_values) {
+    int ChooseStep(const vector<float>& q_values) {
         if (!_explore) return Argmax(Random(), cspan<float>(q_values));
 
         // Subtract average to reduce chance of overflow.
@@ -1006,39 +1006,39 @@ private:
 
     // Cached vectors to avoid reallocation.
     vector<pair<MiniBoard, float>> _xy;
-    vector<Action> _temp;
+    Action _temp;
 };
 
 struct RandomAgent : public Agent {
-    vector<Action> Play(const Board& board) override {
-        vector<Action> actions;
+    Action Play(const Board& board) override {
+        Action action;
         Board my_board = board;
         while (true) {
-            Action action = AutoRandom(my_board);
-            actions << action;
-            Execute(my_board, action);
-            if (std::holds_alternative<NextAction>(action) || Winner(my_board) != Figure::None) break;
+            Step step = AutoRandom(my_board);
+            action << step;
+            Execute(my_board, step);
+            if (std::holds_alternative<NextStep>(step) || Winner(my_board) != Figure::None) break;
         }
-        return actions;
+        return action;
     }
 };
 
 struct GreedyAgent : public Agent {
-    vector<Action> Play(const Board& board) override {
-        vector<Action> actions;
+    Action Play(const Board& board) override {
+        Action action;
         Board my_board = board;
         while (true) {
-            Action action = AutoGreedy(my_board);
-            actions << action;
-            Execute(my_board, action);
-            if (std::holds_alternative<NextAction>(action) || Winner(my_board) != Figure::None) break;
+            Step step = AutoGreedy(my_board);
+            action << step;
+            Execute(my_board, step);
+            if (std::holds_alternative<NextStep>(step) || Winner(my_board) != Figure::None) break;
         }
-        return actions;
+        return action;
     }
 };
 
 // Plan:
-// - value function is based on the entire turn (1 or more actions of same player)
+// - value function is based on the entire turn (1 or more action of same player)
 // - play both as player1 and player2
 // - keep accumulating experience (and save it to file)
 // - play games in parallel
@@ -1088,11 +1088,11 @@ Figure PlayOneGame(Board board, Agent& agent_a, Agent& agent_b, Values& values, 
         Agent& agent = (board.player == Figure::Player1) ? static_cast<Agent&>(agent_a) : static_cast<Agent&>(agent_b);
 
         bool eot = false;
-        for (Action action : agent.Play(board)) {
-            if (eot) Fail("invalid action after end of turn");
-            auto s = Execute(board, action);
-            if (s != nullopt) Fail(fmt::format("invalid action {}", s));
-            eot = std::holds_alternative<NextAction>(action) || Winner(board) != Figure::None;
+        for (Step step : agent.Play(board)) {
+            if (eot) Fail("invalid step after end of turn");
+            auto s = Execute(board, step);
+            if (s != nullopt) Fail(fmt::format("invalid step {}", s));
+            eot = std::holds_alternative<NextStep>(step) || Winner(board) != Figure::None;
         }
         if (!eot) Fail("player didn't end turn");
 
@@ -1182,9 +1182,9 @@ void Browse(const Values& values) {
     while (true) {
         fmt::print("\n");
         Render(stack.back());
-        vector<Action> temp;
+        Action temp;
         vector<Board> options;
-        AllValidActionSequences(stack.back(), temp, [&](vector<Action>& actions, const Board& new_board, auto winner) {
+        AllValidStepSequences(stack.back(), temp, [&](Action& action, const Board& new_board, auto winner) {
             if (values.Lookup(new_board).has_value()) options.push_back(new_board);
             return true;
         });
