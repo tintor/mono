@@ -607,9 +607,9 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) { glVi
 
 struct View : public VertexBuffer_vec2_rgba {
     Shader shader;
+    Uniform_mat4 transform;
     FontRenderer font_renderer;
     Font mono;
-    Uniform_mat4 transform;
     glm::mat4 ortho;
 
     View()
@@ -635,9 +635,9 @@ struct View : public VertexBuffer_vec2_rgba {
     		    color = pixel_rgba;
     		}
         	)END"),
+          transform("transform"),
           font_renderer(1000, 1000),
-          mono("JetBrainsMono-Medium.ttf", 48, &font_renderer),
-          transform("transform") {}
+          mono("santorini/JetBrainsMono-Medium.ttf", 48, &font_renderer) {}
 };
 
 void Render(const Board& board, View& view) {
@@ -1092,7 +1092,6 @@ void Browse(const Values& values) {
 
 int main(int argc, char** argv) {
     InitSegvHandler();
-    Timestamp::init();
 
     if (argc > 1 && argv[1] == "learn"s) {
         Values values;

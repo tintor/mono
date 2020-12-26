@@ -6,11 +6,16 @@ cc_library(
     hdrs = ["santorini.cc", "action.h", "board.h", "cell.h", "coord.h"],
 )
 
-#cc_binary(
-#    name = "santorini",
-#    srcs = ["santorini.cc"],
-#    deps = [":model", "//view:font", "//view:vertex_buffer", "//view:window", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string", "@fmt", "@absl//absl/container:flat_hash_map"],
-#)
+cc_binary(
+    name = "santorini",
+    srcs = ["santorini.cc"],
+    data = ["JetBrainsMono-Medium.ttf"],
+    deps = [":model",
+            "//view:font", "//view:vertex_buffer", "//view:window",
+            "//core:array_deque", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string",
+            "@fmt",
+            "@absl//absl/container:flat_hash_map"],
+)
 
 cc_test(
     name = "santorini_test",

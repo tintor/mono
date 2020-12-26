@@ -22,15 +22,14 @@ cc_library(
     name = "shader",
     hdrs = ["shader.h"],
     srcs = ["shader.cc"],
-    deps = [":glm", ":opengl", "//core:numeric", "@fmt"],
+    deps = [":glm", ":opengl", "//core:numeric", "//core:fmt"],
 )
 
 cc_library(
     name = "font",
     hdrs = ["font.h"],
-    deps = [":color", ":shader"],
-    #srcs = ["font.cc"],
-    includes = ["/usr/local/Cellar/freetype/2.10.1/include/freetype2"],
+    deps = [":color", ":shader", "@fmt", "@freetype2//:lib"],
+    srcs = ["font.cc"],
 )
 
 cc_library(

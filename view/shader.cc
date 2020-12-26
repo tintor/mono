@@ -2,7 +2,7 @@
 #include <string_view>
 using namespace std;
 
-#include <fmt/core.h>
+#include "core/fmt.h"
 
 #include "core/auto.h"
 #include "view/shader.h"
@@ -27,8 +27,8 @@ Shader::Shader(string_view source) {
     if (!success) {
         array<char, 1024> infoLog;
         glGetProgramInfoLog(m_id, infoLog.size(), nullptr, infoLog.data());
-        fmt::print("PROGRAM LINKING ERROR:\n");
-        fmt::print("%s\n", std::string(infoLog.data()));
+        print("PROGRAM LINKING ERROR:\n");
+        print("{}\n", std::string(infoLog.data()));
         exit(0);
     }
     use();
@@ -46,8 +46,8 @@ uint Shader::compile(int type, string_view source) {
     if (!success) {
         array<char, 1024> infoLog;
         glGetShaderInfoLog(shader, infoLog.size(), nullptr, infoLog.data());
-        fmt::print("%s SHADER COMPILATION ERROR:\n", (type == GL_VERTEX_SHADER) ? "VERTEX" : "FRAGMENT");
-        fmt::print("%s\n", string(infoLog.data()));
+        print("{} SHADER COMPILATION ERROR:\n", (type == GL_VERTEX_SHADER) ? "VERTEX" : "FRAGMENT");
+        print("{}\n", string(infoLog.data()));
         exit(0);
     }
     return shader;
@@ -91,7 +91,7 @@ Uniform::Uniform(string_view name, int expectedType) {
 
     array<char, 128> buffer;
     if (name.size() >= buffer.size()) {
-        fmt::print("uniform name too long [%s]\n", name);
+        print("uniform name too long [{}]\n", name);
         exit(0);
     }
     memcpy(buffer.data(), name.data(), name.size());
@@ -99,7 +99,7 @@ Uniform::Uniform(string_view name, int expectedType) {
 
     m_location = glGetUniformLocation(shader, buffer.data());
     if (m_location == -1) {
-        fmt::print("bad uniform name [%s]\n", name);
+        print("bad uniform name [{}]\n", name);
         exit(0);
     }
 
@@ -113,7 +113,7 @@ Uniform::Uniform(string_view name, int expectedType) {
         glGetActiveUniform(shader, i, buffer.size(), &length, &size, &type, buffer.data());
         if (name == string_view(buffer.data(), length)) {
             if (type != expectedType) {
-                fmt::print("uniform [%s] expected type [%s] instead of [%s]\n", name, gluEnumString(expectedType),
+                print("uniform [{}] expected type [{}] instead of [{}]\n", name, gluEnumString(expectedType),
                       gluEnumString(type));
                 exit(0);
             }

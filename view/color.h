@@ -1,4 +1,5 @@
 #pragma once
+#include <cassert>
 
 constexpr int HexDigit(char hex) { return ('A' <= hex && hex <= 'F') ? (hex - 'A' + 10) : (hex - '0'); }
 

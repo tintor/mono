@@ -7,9 +7,12 @@
 #include <glm/gtc/type_ptr.hpp>
 #include FT_FREETYPE_H
 
+#include "core/fmt.h"
 #include "core/auto.h"
-#include "core/format.h"
 #include "view/shader.h"
+
+using std::string;
+using std::string_view;
 
 FontRenderer::FontRenderer(double width, double height)
     : shader(R"END(
@@ -62,7 +65,7 @@ Font::Font(string_view name, int resolution, FontRenderer *renderer) : m_color("
 
     FT_Library ft;
     if (FT_Init_FreeType(&ft)) {
-        std::cout << "ERROR::FREETYPE: Could not init FreeType Library" << std::endl;
+        print("ERROR::FREETYPE: Could not init FreeType Library\n");
         exit(0);
     }
     ON_SCOPE_EXIT(FT_Done_FreeType(ft));
@@ -70,10 +73,10 @@ Font::Font(string_view name, int resolution, FontRenderer *renderer) : m_color("
     // Load font as face
     // TODO do search in both: /System/Library/Fonts and /Library/Fonts with
     // various extensions
-    const char *fmt = name.find('.') != string_view::npos ? "%s" : "/Library/Fonts/%s.ttf";
+    const string fname = format(name.find('.') != string_view::npos ? "{}" : "/Library/Fonts/{}.ttf", name);
     FT_Face face;
-    if (FT_New_Face(ft, format(fmt, name).c_str(), 0, &face)) {
-        std::cout << "ERROR::FREETYPE: Failed to load font: " << format(fmt, name) << std::endl;
+    if (FT_New_Face(ft, fname.c_str(), 0, &face)) {
+        print("ERROR::FREETYPE: Failed to load font: {}\n", fname);
         exit(0);
     }
     ON_SCOPE_EXIT(FT_Done_Face(face));
