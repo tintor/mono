@@ -3,12 +3,12 @@ load("//:library.bzl", "library")
 
 cc_library(
     name = "model",
-    hdrs = ["santorini.cc", "action.h", "board.h", "cell.h", "coord.h"],
+    hdrs = ["action.h", "board.h", "cell.h", "coord.h"],
 )
 
 cc_binary(
     name = "santorini",
-    srcs = ["santorini.cc"],
+    srcs = ["minimax.h", "santorini.cc"],
     data = ["JetBrainsMono-Medium.ttf"],
     deps = [":model",
             "//view:font", "//view:vertex_buffer", "//view:window",

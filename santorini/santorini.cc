@@ -16,6 +16,7 @@
 
 #include "santorini/action.h"
 #include "santorini/board.h"
+#include "santorini/minimax.h"
 
 #include "view/font.h"
 #include "view/glm.h"
@@ -325,6 +326,13 @@ double ClimbRank(Figure player, const Board& board) {
     }
     return rank;
 }
+
+// Heuristics to use:
+// - points for every worker which is not blocked
+// - number of free cells around every worker (if they are not too tall)
+// - number of squares that my workers can reach in 1 step that opponent's workers can't reach in 2 steps? (breaks for Artemis and Hermes)
+// - number of non-domed and non-occupied levels within 1 step from my workers
+// - number of non-domed and non-occupied levels within 2 steps from my workers (that were not included in above)
 
 Action AutoClimber(const Board& board) {
     auto& random = Random();
