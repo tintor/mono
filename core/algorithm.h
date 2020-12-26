@@ -252,6 +252,12 @@ Result Sum(const Iterable& iterable, const UnaryFn& unary_fn) {
     return sum;
 }
 
+template <typename Result, typename Iterable>
+Result Sum(const Iterable& iterable, Result sum) {
+    for (const auto& e : iterable) sum += e;
+    return sum;
+}
+
 template <typename T, typename P>
 size_t IndexOfMax(cspan<T> s, P measure) {
     auto mv = measure(s[0]);

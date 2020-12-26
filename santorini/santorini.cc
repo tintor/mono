@@ -12,6 +12,7 @@
 #include "core/string.h"
 #include "core/timestamp.h"
 #include "core/vector.h"
+#include "core/array_deque.h"
 
 #include "santorini/action.h"
 #include "santorini/board.h"
@@ -166,6 +167,14 @@ int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_dist
 
 double RandomDouble(std::mt19937_64& random) { return std::uniform_real_distribution<double>(0, 1)(random); }
 
+int ChooseWeighted(double u, cspan<double> weights) {
+    FOR(i, weights.size()) {
+      if (u < weights[i]) return i;
+      u -= weights[i];
+    }
+    return weights.size() - 1;
+}
+
 struct ReservoirSampler {
     std::uniform_real_distribution<double> dis;
     size_t count = 0;
@@ -177,6 +186,25 @@ struct ReservoirSampler {
         return dis(random) * ++count <= 1.0;
     }
 };
+
+// Random is used in case of ties.
+template<typename T>
+int Argmax(std::mt19937_64& random, cspan<T> values) {
+    int best_i = -1;
+    T best_value;
+    ReservoirSampler sampler;
+
+    FOR(i, values.size()) {
+        if (sampler.count == 0 || values[i] > best_value) {
+            sampler.count = 1;
+            best_i = i;
+            best_value = values[i];
+            continue;
+        }
+        if (values[i] == best_value && sampler(Random())) best_i = i;
+    }
+    return best_i;
+}
 
 Coord MyRandomFigure(const Board& board, std::mt19937_64& random) {
     Coord out;
@@ -806,12 +834,49 @@ struct Agent {
     virtual vector<Action> Play(const Board& board) = 0;
 };
 
-// TODO Network for inference doesn't have to have gradient tensors allocated!
-struct NeuralAgent : public Agent {
-    Diff in, ref, out, loss;
-    Model model;
+struct SARS {
+    Board state;
+    Board action; // board state after agent's turn, but before opponent's turn (action + state)
+    float reward;
+    optional<Board> next_state; // board state after opponent's turn (or nullopt if game ends after agent's or opponent's turns)
+};
 
-    NeuralAgent() {
+class ReplayBuffer {
+public:
+    ReplayBuffer(int capacity) { buffer.reserve(capacity); }
+
+    vector<SARS> Sample(int count) const {
+        std::mt19937_64& random = Random();
+        if (buffer.size() < count) count = buffer.size();
+
+        vector<int> selected(count);
+        for (int i = 0; i < count; i++) {
+            while (true) {
+                int e = RandomInt(buffer.size(), random);
+                if (contains(cspan<int>(selected.data(), i), e)) continue;
+                selected[i] = e;
+                break;
+            }
+        }
+
+        vector<SARS> sample(count);
+        for (int i = 0; i < count; i++) sample[i] = buffer[selected[i]];
+        return sample;
+    }
+
+    void Add(const SARS& e) {
+        if (buffer.size() == buffer.capacity()) buffer.pop_front();
+        buffer.push_back(e);
+    }
+
+private:
+    mt::array_deque<SARS> buffer;
+};
+
+// network which learns Board -> float mapping
+class BoardNet {
+public:
+    BoardNet() {
         in = Data({5, 5, 7}) << "input";
         ref = Data({1}) << "reference";
         auto w_init = make_shared<NormalInit>(0.01, Random());
@@ -833,59 +898,107 @@ struct NeuralAgent : public Agent {
         model.optimizer->alpha = env("alpha", 0.01);
     }
 
-    const vector<float>& Predict(const vector<MiniBoard>& boards) {
-        model.SetBatchSize(boards.size());
-        FOR(i, boards.size()) ToTensor(boards[i], in->v.slice(i));
-        model.Forward(false);
+    const vector<float>& Eval(const vector<MiniBoard>& batch) {
+        model.SetBatchSize(batch.size()); // TODO this might be slow if different
+        FOR(i, batch.size()) ToTensor(batch[i], in->v.slice(i));
+        model.Forward(/*training*/false);
         return out->v.vdata();
     }
 
-#ifdef XXX
-    void Train() {
-        model.SetBatchSize(batch);
-        vector<uint> samples;
-        samples.resize(values.Size());
-        for (auto i : range(values.Size())) samples[i] = i;
-        std::shuffle(samples.begin(), samples.end(), Random());
-
-        /*for (auto i : range(10)) {
-            // Epoch
-            for(auto i : range(batch)) {
-                const auto& sample = values.Sample(Random());
-                ToTensor(sample.first, in->v.slice(i));
-                ref->v[0] = sample.second.ValueP1();
-            }
-            // TODO begin epoch
-            model.Forward(true);
-            model.Backward(loss);
-            // TODO end epoch
+    void Train(const vector<pair<MiniBoard, float>>& batch) {
+        model.SetBatchSize(batch.size());
+        FOR(i, batch.size()) {
+            ToTensor(batch[i].first, in->v.slice(i));
+            ref->v[i] = batch[i].second;
         }
-        if (episodes % 100 == 0) {
-            model.Print();
-            double s = 0;
-            for(const auto& e : values)
-                s += std::pow(double(e.second.ValueP1()) - double(Predict(e.first)), 2);
-            s /= values.Size();
-            println("dataset loss:%.4f accuracy:%.04f", s, std::sqrt(s));
-        }*/
+        model.Forward(/*training*/true);
+        model.Backward(loss);
     }
-#endif
 
+private:
+    Diff in, ref, out, loss;
+    Model model;
+};
+
+// TODO Use Prioritized Replay Buffer (select SARS transitions with the worst fit).
+// TODO Use Double DQN: q1 and q2 (instead of q_policy and q_train), and flip them randomly.
+// TODO Can we use Dueling DQN here (with variable number of actions)?
+class DQNAgent : public Agent {
+public:
+    const double boltzmann_tau = 1;
+    const float gamma = 0.999;
+
+    bool _explore = true;
+
+    // Inference only. No policy improvement or sample collection.
     vector<Action> Play(const Board& board) override {
-        // List of all possible moves
         vector<MiniBoard> all_boards;
         vector<vector<Action>> all_actions;
-        vector<Action> temp;
-        AllValidActionSequences(board, temp, [&](vector<Action>& actions, const Board& new_board, auto winner) {
+
+        AllValidActionSequences(board, _temp, [&](vector<Action>& actions, const Board& new_board, auto winner_ignored) {
             all_boards << static_cast<MiniBoard>(new_board);
             all_actions << actions;
             return true;
         });
 
-        const vector<float>& values = Predict(all_boards);
-        cspan<float> svalues = {values.data(), values.size()};
-        return all_actions[NormalizedWeightedSample(svalues, Random())];
+        if (all_boards.empty()) return {};
+        return all_actions[ChooseAction(_q_policy.Eval(all_boards))];
     }
+
+    // TODO How are transitions collected?
+    // TODO How is training invoked?
+    // TODO This training can happen in PyTorch python script on carbide, while network could be loaded into C++ for inference.
+    void ImprovePolicy(const Figure ego) {
+        const Figure opponent = Other(ego);
+        const int sample_size = 16;
+        const int K = 1000;
+
+        FOR(i, K) {
+            _xy.clear();
+            // TODO Collect all new boards from double nested loop, and do all evals at once.
+            // TODO Parallelize this loop.
+            for (const auto& [state, action, reward, next_state] : _replay_buffer.Sample(sample_size)) {
+                float max_q = 0;
+                if (next_state.has_value()) {
+                    max_q = -1;
+                    AllValidActionSequences(next_state.value(), _temp, [&](vector<Action>& actions, const Board& new_board, auto winner) {
+                        if (winner == ego) {
+                          max_q = 1;
+                        } else if (winner != opponent) {
+                          max_q = std::max(max_q, _q_policy.Eval({new_board})[0]);
+                        }
+                        return true;
+                    });
+                    // If no possible move then game is lost and max_q == -1.
+                }
+                _xy.emplace_back(static_cast<MiniBoard>(action), reward + gamma * max_q);
+            }
+            _q_train.Train(_xy); // with Huber loss (quadratic for small errors, linear for large errors)
+        }
+        // TODO evaluate loss against the entire replay_buffer
+
+        // TODO Copy weights from q_train to q_policy.
+    }
+
+private:
+    int ChooseAction(const vector<float>& q_values) {
+        if (!_explore) return Argmax(Random(), cspan<float>(q_values));
+
+        // Subtract average to reduce chance of overflow.
+        // TODO Subtracting max value might be better.
+        double avg = Sum(q_values, 0.0) / q_values.size();
+        vector<double> exp_q_values;
+        for (float v : q_values) exp_q_values << exp((v - avg) * boltzmann_tau);
+        const double u = RandomInt(q_values.size(), Random()) * Sum(exp_q_values, 0.0);
+        return ChooseWeighted(u, exp_q_values);
+    }
+
+    ReplayBuffer _replay_buffer;
+    BoardNet _q_train, _q_policy;
+
+    // Cached vectors to avoid reallocation.
+    vector<pair<MiniBoard, float>> _xy;
+    vector<Action> _temp;
 };
 
 struct RandomAgent : public Agent {
