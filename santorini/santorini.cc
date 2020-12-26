@@ -273,9 +273,8 @@ template <typename Visitor>
 bool AllValidStepSequences(const Board& board, Action& temp, const Visitor& visit) {
     return AllValidSteps(board, [&](const Board& new_board, const Step& step) {
         temp.push_back(step);
-        auto winner = Winner(new_board);
-        if (std::holds_alternative<NextStep>(step) || winner != Figure::None) {
-            if (!visit(temp, new_board, winner)) return false;
+        if (std::holds_alternative<NextStep>(step) || new_board.phase == Phase::GameOver) {
+            if (!visit(temp, new_board)) return false;
         } else {
             if (!AllValidStepSequences(new_board, temp, visit)) return false;
         }
@@ -301,14 +300,14 @@ Step AutoGreedy(const Board& board) {
     Action temp;
     Step choice;
     ReservoirSampler sampler;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
         // Print(action);
-        if (winner == board.player) {
+        if (new_board.phase == Phase::GameOver && new_board.player == board.player) {
             choice = action[0];
             sampler.count = 1;
             return false;
         }
-        if (winner == Figure::None && sampler(random)) choice = action[0];
+        if (new_board.phase != Phase::GameOver && sampler(random)) choice = action[0];
         return true;
     });
     Check(sampler.count > 0);
@@ -339,15 +338,17 @@ Step AutoClimber(const Board& board) {
     Step choice;
     ReservoirSampler sampler;
     double best_rank = -1e100;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
         // Print(action);
-        if (winner == board.player) {
-            choice = action[0];
-            best_rank = 1e100;
-            sampler.count = 1;
-            return false;
+        if (new_board.phase == Phase::GameOver) {
+            if (new_board.player == board.player) {
+                choice = action[0];
+                best_rank = 1e100;
+                sampler.count = 1;
+                return false;
+            }
+            return true;
         }
-        if (winner != Figure::None) return true;
 
         double rank = ClimbRank(board.player, new_board);
         if (rank == best_rank && sampler(random)) choice = action[0];
@@ -382,7 +383,6 @@ size_t Rollout(Figure player, Board board) {
 struct Node {
     Step step;
     Board board;  // board state post-step
-    Figure winner;
     size_t w = 0;  // number of wins
     size_t n = 0;  // total number of rollouts (w/n is win ratio)
     vector<std::unique_ptr<Node>> children;
@@ -408,15 +408,14 @@ void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
         auto node = std::make_unique<Node>();
         node->step = step;
         node->board = new_board;
-        node->winner = Winner(new_board);
         out.push_back(std::move(node));
         return true;
     });
 }
 
 size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node) {
-    if (node->winner != Figure::None) {
-        size_t e = (player == node->winner) ? 1 : 0;
+    if (node->board.phase == Phase::GameOver) {
+        size_t e = (player == node->board.player) ? 1 : 0;
         node->w += e;
         node->n += 1;
         return e;
@@ -452,14 +451,16 @@ optional<Step> TrivialStep(const Board& board) {
     size_t count = 0;
     Action temp;
     bool done = false;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board, Figure winner) {
+    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
         Check(!done);
-        if (winner == board.player) {
-            trivial_step = action[0];
-            done = true;
-            return false;
+        if (new_board.phase == Phase::GameOver) {
+            if (new_board.player == board.player) {
+                trivial_step = action[0];
+                done = true;
+                return false;
+            }
+            return true;
         }
-        if (winner != Figure::None) return true;
         // TODO check if opponent can win in one sequence!
         trivial_step = (count == 0) ? optional{action[0]} : nullopt;
         count += 1;
@@ -942,7 +943,7 @@ public:
         vector<MiniBoard> all_boards;
         vector<Action> all_action;
 
-        AllValidStepSequences(board, _temp, [&](Action& action, const Board& new_board, auto winner_ignored) {
+        AllValidStepSequences(board, _temp, [&](Action& action, const Board& new_board) {
             all_boards << static_cast<MiniBoard>(new_board);
             all_action << action;
             return true;
@@ -968,7 +969,8 @@ public:
                 float max_q = 0;
                 if (next_state.has_value()) {
                     max_q = -1;
-                    AllValidStepSequences(next_state.value(), _temp, [&](Action& action, const Board& new_board, auto winner) {
+                    AllValidStepSequences(next_state.value(), _temp, [&](Action& action, const Board& new_board) {
+                        auto winner = Winner(new_board);
                         if (winner == ego) {
                           max_q = 1;
                         } else if (winner != opponent) {
@@ -1183,7 +1185,7 @@ void Browse(const Values& values) {
         Render(stack.back());
         Action temp;
         vector<Board> options;
-        AllValidStepSequences(stack.back(), temp, [&](Action& action, const Board& new_board, auto winner) {
+        AllValidStepSequences(stack.back(), temp, [&](Action& action, const Board& new_board) {
             if (values.Lookup(new_board).has_value()) options.push_back(new_board);
             return true;
         });
