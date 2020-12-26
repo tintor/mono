@@ -44,9 +44,13 @@ private:
     mutable size_t hash_code = 0;
 };
 
+enum class Phase { PlaceWorker, MoveBuild, GameOver };
+
 struct Board : public MiniBoard {
-    bool setup = true;
-    Figure player = Figure::Player1;
+    Phase phase = Phase::PlaceWorker;
+    Figure player = Figure::Player1; // Will be set to winner in GameOver phase.
+
+    // Inner action state
     std::optional<Coord> moved;
     bool built = false;
 
@@ -54,7 +58,7 @@ struct Board : public MiniBoard {
     Cell& operator()(Coord c) { return cell[c.v]; }
 
     bool operator==(const Board& b) const {
-        return setup == b.setup && player == b.player && moved == b.moved && built == b.built && cell == b.cell;
+        return phase == b.phase && player == b.player && moved == b.moved && built == b.built && cell == b.cell;
     }
 };
 
@@ -72,7 +76,7 @@ std::ostream& operator<<(std::ostream& os, const MiniBoard& board) {
 std::ostream& operator<<(std::ostream& os, const Board& board) {
     os << static_cast<MiniBoard>(board);
     char p[2] = {char(board.player), 0};
-    os << fmt::format("setup {}, player {}", board.setup, p);
+    os << fmt::format("phase {}, player {}", board.phase, p);
     if (board.moved) os << fmt::format(" moved {}{}", board.moved->x(), board.moved->y());
     os << fmt::format(" built {}", board.built) << std::endl;
     return os;
