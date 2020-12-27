@@ -12,7 +12,7 @@ using namespace std;
 // Computer interface
 // ==================
 
-std::mt19937_64& Random() {
+static std::mt19937_64& Random() {
     static atomic<size_t> seed = 0;
     thread_local bool initialized = false;
     thread_local std::mt19937_64 random;
@@ -23,36 +23,7 @@ std::mt19937_64& Random() {
     return random;
 }
 
-int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
-
-double RandomDouble(std::mt19937_64& random) { return std::uniform_real_distribution<double>(0, 1)(random); }
-
-int ChooseWeighted(double u, cspan<double> weights) {
-    FOR(i, weights.size()) {
-      if (u < weights[i]) return i;
-      u -= weights[i];
-    }
-    return weights.size() - 1;
-}
-
-// Random is used in case of ties.
-template<typename T>
-int Argmax(std::mt19937_64& random, cspan<T> values) {
-    int best_i = -1;
-    T best_value;
-    ReservoirSampler sampler;
-
-    FOR(i, values.size()) {
-        if (sampler.count == 0 || values[i] > best_value) {
-            sampler.count = 1;
-            best_i = i;
-            best_value = values[i];
-            continue;
-        }
-        if (values[i] == best_value && sampler(Random())) best_i = i;
-    }
-    return best_i;
-}
+inline int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
 
 Coord MyRandomFigure(const Board& board, std::mt19937_64& random) {
     Coord out;
