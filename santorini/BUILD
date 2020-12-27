@@ -9,9 +9,17 @@ cc_library(
 )
 
 cc_library(
+    name = "greedy",
+    hdrs = ["greedy.h"],
+    srcs = ["greedy.cc"],
+    deps = [":model", "//core:random"],
+)
+
+cc_library(
     name = "minimax",
-    hdrs = ["minimax.h"],
-    deps = [":model"],
+    hdrs = ["minimax.h", "minimax_generic.h"],
+    srcs = ["minimax.cc"],
+    deps = [":greedy"],
 )
 
 cc_library(
@@ -21,12 +29,17 @@ cc_library(
     deps = [":model", "//core:random"],
 )
 
+cc_library(
+    name = "ui",
+    srcs = ["ui.cc"],
+    deps = ["//view:font", "//view:vertex_buffer", "//view:window", "//core:random", ":model", ":minimax", ":mcts", ":greedy"],
+)
+
 cc_binary(
     name = "santorini",
     srcs = ["santorini.cc"],
     data = ["JetBrainsMono-Medium.ttf"],
-    deps = [":model", ":minimax", ":mcts",
-            "//view:font", "//view:vertex_buffer", "//view:window",
+    deps = [":model", ":minimax", ":mcts", ":ui",
             "//core:array_deque", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string"],
 )
 

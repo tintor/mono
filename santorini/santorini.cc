@@ -20,12 +20,6 @@
 #include "santorini/mcts.h"
 #include "santorini/reservoir_sampler.h"
 
-#include "view/font.h"
-#include "view/glm.h"
-#include "view/shader.h"
-#include "view/vertex_buffer.h"
-#include "view/window.h"
-
 using namespace std;
 
 // Computer interface
@@ -93,19 +87,6 @@ Step RandomStep(const Board& board) {
     if (c == 0) return NextStep{};
     if (c <= 4) return MoveStep{MyRandomFigure(board, random), Coord::Random(random)};
     return BuildStep{Coord::Random(random), bool(RandomInt(2, random))};
-}
-
-bool IsEndOfTurn(const Board& board) {
-    bool next = false;
-    bool other = false;
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        if (std::holds_alternative<NextStep>(step))
-            next = true;
-        else
-            other = true;
-        return !other;
-    });
-    return next && !other;
 }
 
 bool IsValid(const Board& board, const Step& step) {
@@ -227,245 +208,6 @@ Step AutoMiniMax(const Board& board, const int depth) {
     return best_step;
 }
 
-// Human interface
-// ===============
-
-constexpr int Width = 1000, Height = 1000;
-
-vector<Board> g_history;
-Board g_board_copy;
-optional<Coord> g_selected;
-
-Board g_board;
-
-void Play(optional<string_view> status) {
-    if (status) {
-        fmt::print("{}\n", *status);
-        return;
-    }
-
-    g_history.push_back(g_board_copy);
-    g_selected = nullopt;
-    auto w = Winner(g_board);
-    if (w != Figure::None) {
-        fmt::print("Player {} wins!\n", PlayerName(w));
-        return;
-    }
-
-    if (!IsEndOfTurn(g_board)) return;
-
-    g_history.push_back(g_board);
-    Check(Next(g_board) == nullopt);
-    w = Winner(g_board);
-    if (w != Figure::None) {
-        fmt::print("Player {} wins!\n", PlayerName(w));
-        return;
-    }
-}
-
-void key_callback(GLFWwindow* window, int key, int scancode, int step, int mods) {
-    if (step == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mods == GLFW_MOD_SHIFT) {
-        glfwSetWindowShouldClose(window, GL_TRUE);
-        return;
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_SPACE) {
-        g_board_copy = g_board;
-        Play(Next(g_board));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_U) {
-        if (g_history.size() > 0) {
-            g_board = g_history.back();
-            g_history.pop_back();
-        }
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_1) {
-        g_board_copy = g_board;
-        Step step = AutoRandom(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_2) {
-        g_board_copy = g_board;
-        Step step = AutoGreedy(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_3) {
-        g_board_copy = g_board;
-        Step step = AutoClimber(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_4) {
-        g_board_copy = g_board;
-        Step step = AutoMCTS(g_board, 10000);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_5) {
-        g_board_copy = g_board;
-        Step step = AutoMiniMax(g_board, 12);
-        Play(Execute(g_board, step));
-    }
-}
-
-void OnClick(Coord dest, bool left, bool shift) {
-    g_board_copy = g_board;
-    if (!left) {
-        Play(Build(g_board, dest, shift));
-    } else if (g_board.phase == Phase::PlaceWorker) {
-        Play(Place(g_board, dest));
-    } else if (g_board(dest).figure == g_board.player) {
-        g_selected = dest;
-    } else if (g_selected) {
-        Play(Move(g_board, *g_selected, dest));
-    }
-}
-
-void mouse_button_callback(GLFWwindow* window, int button, int step, int mods) {
-    if (step == GLFW_PRESS) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        int mouse_x = floor(xpos - 100) / 160;
-        int mouse_y = floor(Height - ypos - 100) / 160;
-        if (mouse_x >= 0 && mouse_x < 5 && mouse_y >= 0 && mouse_y < 5)
-            OnClick({mouse_x, mouse_y}, button == GLFW_MOUSE_BUTTON_LEFT, mods == GLFW_MOD_SHIFT);
-    }
-}
-
-void scroll_callback(GLFWwindow* window, double x, double y) {}
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) { glViewport(0, 0, width, height); }
-
-struct View : public VertexBuffer_vec2_rgba {
-    Shader shader;
-    Uniform_mat4 transform;
-    FontRenderer font_renderer;
-    Font mono;
-    glm::mat4 ortho;
-
-    View()
-        : VertexBuffer_vec2_rgba(25),
-          shader(R"END(
-    		#version 330 core
-    		layout (location = 0) in vec2 pos;
-    		layout (location = 1) in vec4 rgba;
-    		out vec4 pixel_rgba;
-    		uniform mat4 transform;
-
-            void main() {
-    		    vec4 p = transform * vec4(pos, 0.0, 1.0);
-		        gl_Position = p;
-                pixel_rgba = rgba;
-	    	}
-
-		    #version 330 core
-    		in vec4 pixel_rgba;
-    		out vec4 color;
-
-    		void main() {
-    		    color = pixel_rgba;
-    		}
-        	)END"),
-          transform("transform"),
-          font_renderer(1000, 1000),
-          mono("santorini/JetBrainsMono-Medium.ttf", 48, &font_renderer) {}
-};
-
-void Render(const Board& board, View& view) {
-    glUseProgram(view.shader);
-    view.bind();
-    view.transform = view.ortho;
-
-    // Frame
-    for (int i = 0; i <= 5; i++) {
-        const uint64_t color = 0xFF808080;
-        view.add({100, 100 + i * 160}, color);
-        view.add({100 + 800, 100 + i * 160}, color);
-
-        view.add({100 + i * 160, 100}, color);
-        view.add({100 + i * 160, 100 + 800}, color);
-    }
-    view.draw(GL_LINES);
-
-    for (int y = 0; y < 5; y++) {
-        for (int x = 0; x < 5; x++) {
-            const double s = 160;
-            const double px = 100 + x * s + s / 2;
-            const double py = 100 + y * s + s / 2;
-            const Coord c(x, y);
-            const auto cell = board(c);
-
-            if (g_selected && c == *g_selected) {
-                double a = 80;
-                const uint64_t color = 0xFF00FFFF;
-                view.add({px - a, py - a}, color);
-                view.add({px + a, py - a}, color);
-                view.add({px + a, py + a}, color);
-                view.add({px - a, py + a}, color);
-                view.draw(GL_LINE_LOOP);
-            }
-
-            // Towers
-            if (cell.level >= 1) {
-                double a = 70;
-                const uint64_t color = 0xFFFFFFFF;
-                view.add({px - a, py - a}, color);
-                view.add({px + a, py - a}, color);
-                view.add({px + a, py + a}, color);
-                view.add({px - a, py + a}, color);
-                view.draw(GL_LINE_LOOP);
-            }
-            if (cell.level >= 2) {
-                const uint64_t color = 0xFFFFFFFF;
-                double a = 60;
-                view.add({px - a, py - a}, color);
-                view.add({px + a, py - a}, color);
-                view.add({px + a, py + a}, color);
-                view.add({px - a, py + a}, color);
-                view.draw(GL_LINE_LOOP);
-            }
-            if (cell.level >= 3) {
-                const uint64_t color = 0xFFFFFFFF;
-                double a = 50;
-                view.add({px - a, py - a}, color);
-                view.add({px + a, py - a}, color);
-                view.add({px + a, py + a}, color);
-                view.add({px - a, py + a}, color);
-                view.draw(GL_LINE_LOOP);
-            }
-
-            // Domes
-            if (cell.figure == Figure::Dome) {
-                const uint64_t color = 0xFFFF0000;
-                double a = 40;
-                for (int i = 0; i < 16; i++) {
-                    double k = i * 2 * M_PI / 16;
-                    view.add({px + cos(k) * a, py + sin(k) * a}, color);
-                }
-                view.draw(GL_TRIANGLE_FAN);
-            }
-
-            // Player pieces
-            if (cell.figure == Figure::Player1 || cell.figure == Figure::Player2) {
-                const uint64_t color = (cell.figure == Figure::Player1) ? 0xFF00FFFF : 0xFF0000FF;
-                double a = 40;
-                view.add({px - a, py - a}, color);
-                view.add({px + a, py - a}, color);
-                view.add({px + a, py + a}, color);
-                view.add({px - a, py + a}, color);
-                view.draw(GL_TRIANGLE_FAN);
-            }
-        }
-    }
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    view.mono.moveTo(10, 980);
-    view.mono.m_scale = 13.0 / 48;
-    view.mono.m_color = Color("FFFFFF");
-    view.mono.render(fmt::format("Player {}", PlayerName(board.player)));
-    if (board.moved) view.mono.render(" Moved");
-    if (board.built) view.mono.render(" Built");
-    glDisable(GL_BLEND);
-}
-
 // Benchmarks and training
 // -----------------------
 
@@ -479,7 +221,7 @@ Figure Battle(const Policy& policy_a, const Policy& policy_b) {
         const Policy& policy = (board.player == Figure::Player1) ? policy_a : policy_b;
         auto s = Execute(board, policy(board));
         if (s != nullopt) {
-            fmt::print("faul\n");
+            print("faul\n");
             return Other(board.player);
         }
     }
@@ -508,7 +250,7 @@ void AutoBattle(int count, string_view name_a, string_view name_b) {
         while (!stop) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             FOR(j, message.size()) cout << '\r';
-            message = fmt::format("{} {} : {} {}", name_a, wins_a, wins_b, name_b);
+            message = format("{} {} : {} {}", name_a, wins_a, wins_b, name_b);
             cout << message;
             cout.flush();
         }
@@ -784,7 +526,7 @@ Figure PlayOneGame(Board board, Agent& agent_a, Agent& agent_b, Values& values, 
         for (Step step : agent.Play(board)) {
             if (eot) Fail("invalid step after end of turn");
             auto s = Execute(board, step);
-            if (s != nullopt) Fail(fmt::format("invalid step {}", s));
+            if (s != nullopt) Fail(format("invalid step {}", s));
             eot = std::holds_alternative<NextStep>(step) || Winner(board) != Figure::None;
         }
         if (!eot) Fail("player didn't end turn");
@@ -821,7 +563,7 @@ Score PlayManyGames(Agent& agent_a, Agent& agent_b, const size_t tasks, const si
             auto c = ++completed;
             if (c % 50 == 0) {
                 std::unique_lock lock(g_cout_mutex);
-                fmt::print("started {}, finished {}\n", next.load(), c);
+                print("started {}, finished {}\n", next.load(), c);
             }
         }
         std::unique_lock lock(score_mutex);
@@ -843,7 +585,7 @@ void Learn(Values& values) {
     Timestamp begin;
     PlayManyGames(agent_a, agent_b, 100, 2000, values);
     Timestamp end;
-    fmt::print("elapsed {}, states {}\n", begin.elapsed_s(end), values.Size());
+    print("elapsed {}, states {}\n", begin.elapsed_s(end), values.Size());
 
     // self-play
 /*    double ratio = 0.5;
@@ -873,7 +615,7 @@ void Learn(Values& values) {
 void Browse(const Values& values) {
     vector<Board> stack = { Board() };
     while (true) {
-        fmt::print("\n");
+        print("\n");
         Render(stack.back());
         Action temp;
         vector<Board> options;
@@ -886,15 +628,15 @@ void Browse(const Values& values) {
         for (const Board& b : options) {
             auto score = values.Lookup(b);
             column_section(10, 15);
-            fmt::print("[{}]", id);
-            if (score) fmt::print("{} {}", score->p1, score->p2); else fmt::print("\n");
+            print("[{}]", id);
+            if (score) print("{} {}", score->p1, score->p2); else print("\n");
             id += 1;
             Render(b);
         }
         end_column_section();
 
         while (true) {
-            fmt::print("> ");
+            print("> ");
             std::cin >> id;
             if (-1 <= id && id < int(options.size())) break;
         }
@@ -903,6 +645,8 @@ void Browse(const Values& values) {
         if (id >= 0) stack.push_back(options[id]);
     }
 }
+
+void RunUI();
 
 int main(int argc, char** argv) {
     InitSegvHandler();
@@ -939,21 +683,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    auto window = CreateWindow({.width = Width, .height = Height, .resizeable = false});
-    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
-    glfwSetScrollCallback(window, scroll_callback);
-    glViewport(0, 0, Width, Height);
-
-    glClearColor(0.0, 0.0, 0.0, 1.0);
-
-    View view;
-    view.ortho = glm::ortho(0.0, double(Width), 0.0, double(Height));
-
-    RunEventLoop(window, [&]() {
-        glClear(GL_COLOR_BUFFER_BIT);
-        Render(g_board, view);
-    });
+    RunUI();
     return 0;
 }
