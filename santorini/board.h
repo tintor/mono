@@ -4,38 +4,24 @@
 #include <filesystem>
 #include "absl/container/flat_hash_map.h"
 
+#include "core/algorithm.h"
+#include "core/numeric.h"
+#include "core/column.h"
+#include "core/tensor.h"
+#include "core/fmt.h"
+
 #include "santorini/cell.h"
 #include "santorini/coord.h"
-#include "core/column.h"
-#include "core/check.h"
 
 using Cells = std::array<Cell, 25>;
-
-std::array<size_t, 7> zorbist[25];
-struct InitZorbist {
-    InitZorbist() {
-        std::mt19937_64 re(0);
-        FOR(i, 25) for (auto& e : zorbist[i]) e = re();
-    }
-} init_zorbist;
+size_t CellsHash(const Cells& cells);
 
 struct MiniBoard {
     Cells cell;
 
     size_t hash() const {
-        if (hash_code != 0) return hash_code;
-
-        size_t h = 0;
-        for (int i = 0; i < 25; i++) {
-            const auto& z = zorbist[i];
-            auto c = cell[i];
-            h ^= z[c.level];
-            if (c.figure == Figure::Dome) h ^= z[4];
-            if (c.figure == Figure::Player1) h ^= z[5];
-            if (c.figure == Figure::Player2) h ^= z[6];
-        }
-        hash_code = h ? h : 1;
-        return h;
+        if (hash_code == 0) hash_code = CellsHash(cell);
+        return hash_code;
     }
 
     bool operator==(const MiniBoard& b) const { return cell == b.cell; }
@@ -62,7 +48,11 @@ struct Board : public MiniBoard {
     }
 };
 
-std::ostream& operator<<(std::ostream& os, const MiniBoard& board) {
+inline Figure Winner(const Board& board) {
+    return (board.phase != Phase::GameOver) ? Figure::None : board.player;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const MiniBoard& board) {
     for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 5; col++) {
             const Cell c = board.cell[row * 5 + col];
@@ -73,20 +63,20 @@ std::ostream& operator<<(std::ostream& os, const MiniBoard& board) {
     return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const Board& board) {
+inline std::ostream& operator<<(std::ostream& os, const Board& board) {
     os << static_cast<MiniBoard>(board);
     char p[2] = {char(board.player), 0};
-    os << fmt::format("phase {}, player {}", board.phase, p);
-    if (board.moved) os << fmt::format(" moved {}{}", board.moved->x(), board.moved->y());
-    os << fmt::format(" built {}", board.built) << std::endl;
+    os << format("phase {}, player {}", board.phase, p);
+    if (board.moved) os << format(" moved {}{}", board.moved->x(), board.moved->y());
+    os << format(" built {}", board.built) << std::endl;
     return os;
 }
 
-void Print(const Board& board) { *fos << board; }
+inline void Print(const Board& board) { *fos << board; }
 
-void Print(const MiniBoard& board) { *fos << board; }
+inline void Print(const MiniBoard& board) { *fos << board; }
 
-void Render(const MiniBoard& board) {
+inline void Render(const MiniBoard& board) {
     const std::string color[4] = { "\033[0m", "\033[0;34m", "\033[0;33m", "\033[1;31m" };
     const char* tower = ".#xo";
 
@@ -109,21 +99,21 @@ void Render(const MiniBoard& board) {
     }
 }
 
-bool Less(const Cells& a, const Cells& b) {
+inline bool Less(const Cells& a, const Cells& b) {
     for (int i = 0; i < 25; i++) {
         if (a[i] != b[i]) return Less(a[i], b[i]);
     }
     return false;
 }
 
-Cells Transform(const Cells& cell, int transform) {
+inline Cells Transform(const Cells& cell, int transform) {
     Cells out;
     for (Coord e : kAll) out[e.v] = cell[Transform(e, transform).v];
     return out;
 }
 
 // Returns the same board for all symmetry variations!
-MiniBoard Normalize(const MiniBoard& board) {
+inline MiniBoard Normalize(const MiniBoard& board) {
     // generate all 8 transforms and return the smallest one
     MiniBoard out = board;
     for (int transform = 1; transform < 8; transform++) {
@@ -163,7 +153,7 @@ int Count(const Board& board, const Fn& fn) {
 constexpr int CellBits = 4 + 3;
 constexpr int BoardBits = 25 * CellBits;
 
-void ToTensor(const MiniBoard& board, tensor out) {
+inline void ToTensor(const MiniBoard& board, tensor out) {
     if (out.shape() != dim4(5, 5, 7)) Fail(out.shape().str());
     FOR(x, 5) FOR(y, 5) {
         tensor::type* s = out.data() + out.offset(x, y);
@@ -178,7 +168,7 @@ void ToTensor(const MiniBoard& board, tensor out) {
     }
 }
 
-MiniBoard FromTensor(tensor out) {
+inline MiniBoard FromTensor(tensor out) {
     if (out.shape() != dim4(5, 5, 7)) Fail(out.shape().str());
     MiniBoard board;
     FOR(x, 5) FOR(y, 5) {

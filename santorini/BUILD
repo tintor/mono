@@ -3,7 +3,9 @@ load("//:library.bzl", "library")
 
 cc_library(
     name = "model",
-    hdrs = ["action.h", "board.h", "cell.h", "coord.h"],
+    hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h"],
+    srcs = ["execute.cc", "board.cc"],
+    deps = ["@absl//absl/container:flat_hash_map", "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor"],
 )
 
 cc_binary(
@@ -12,9 +14,7 @@ cc_binary(
     data = ["JetBrainsMono-Medium.ttf"],
     deps = [":model",
             "//view:font", "//view:vertex_buffer", "//view:window",
-            "//core:array_deque", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string",
-            "@fmt",
-            "@absl//absl/container:flat_hash_map"],
+            "//core:array_deque", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string"],
 )
 
 cc_test(

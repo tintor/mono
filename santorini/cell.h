@@ -1,4 +1,5 @@
 #pragma once
+#include <string_view>
 
 enum class Figure : char { None = '.', Dome = 'D', Player1 = 'a', Player2 = 'b'};
 
