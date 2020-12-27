@@ -15,7 +15,10 @@
 #include "core/array_deque.h"
 
 #include "santorini/execute.h"
+#include "santorini/enumerator.h"
 #include "santorini/minimax.h"
+#include "santorini/mcts.h"
+#include "santorini/reservoir_sampler.h"
 
 #include "view/font.h"
 #include "view/glm.h"
@@ -50,18 +53,6 @@ int ChooseWeighted(double u, cspan<double> weights) {
     }
     return weights.size() - 1;
 }
-
-struct ReservoirSampler {
-    std::uniform_real_distribution<double> dis;
-    size_t count = 0;
-
-    ReservoirSampler() : dis(0.0, 1.0) {}
-
-    template <typename Random>
-    bool operator()(Random& random) {
-        return dis(random) * ++count <= 1.0;
-    }
-};
 
 // Random is used in case of ties.
 template<typename T>
@@ -104,34 +95,6 @@ Step RandomStep(const Board& board) {
     return BuildStep{Coord::Random(random), bool(RandomInt(2, random))};
 }
 
-template <typename Visitor>
-bool Visit(const Board& board, const Step& step, const Visitor& visit) {
-    Board my_board = board;
-    if (Execute(my_board, step) != nullopt) return true;
-    return visit(my_board, step);
-}
-
-#define VISIT(A) \
-    if (!Visit(board, A, visit)) return false;
-
-template <typename Visitor>
-bool AllValidSteps(const Board& board, const Visitor& visit) {
-    VISIT(NextStep{});
-    if (board.phase == Phase::PlaceWorker) {
-        for (Coord e : kAll) VISIT(PlaceStep{e});
-        return true;
-    }
-    for (Coord e : kAll) {
-        if (board(e).figure == board.player) {
-            for (Coord d : kAll)
-                if (d != e) VISIT((MoveStep{e, d}));
-        }
-    }
-    for (bool dome : {false, true})
-        for (Coord e : kAll) VISIT((BuildStep{e, dome}));
-    return true;
-}
-
 bool IsEndOfTurn(const Board& board) {
     bool next = false;
     bool other = false;
@@ -143,20 +106,6 @@ bool IsEndOfTurn(const Board& board) {
         return !other;
     });
     return next && !other;
-}
-
-template <typename Visitor>
-bool AllValidStepSequences(const Board& board, Action& temp, const Visitor& visit) {
-    return AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        temp.push_back(step);
-        if (std::holds_alternative<NextStep>(step) || new_board.phase == Phase::GameOver) {
-            if (!visit(temp, new_board)) return false;
-        } else {
-            if (!AllValidStepSequences(new_board, temp, visit)) return false;
-        }
-        temp.pop_back();
-        return true;
-    });
 }
 
 bool IsValid(const Board& board, const Step& step) {
@@ -237,139 +186,6 @@ Step AutoClimber(const Board& board) {
     });
     Check(sampler.count > 0);
     return choice;
-}
-
-size_t Rollout(Figure player, Board board) {
-    auto& random = Random();
-    while (true) {
-        // Select step uniformly out of all possible action!
-        Step random_step;
-        ReservoirSampler sampler;
-        AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-            if (sampler(random)) random_step = step;
-            return true;
-        });
-
-        Check(Execute(board, random_step) == nullopt);
-        auto w = Winner(board);
-        if (w != Figure::None) return (w == player) ? 1 : 0;
-    }
-}
-
-struct Node {
-    Step step;
-    Board board;  // board state post-step
-    size_t w = 0;  // number of wins
-    size_t n = 0;  // total number of rollouts (w/n is win ratio)
-    vector<std::unique_ptr<Node>> children;
-};
-
-size_t ChooseChild(size_t N, const vector<std::unique_ptr<Node>>& children) {
-    size_t best_i = 0;
-    double best_ucb1 = 0;
-    for (size_t i = 0; i < children.size(); i++) {
-        const auto& child = children[i];
-        double ucb1 = (child->n == 0) ? std::numeric_limits<double>::infinity()
-                                      : (child->w / child->n + 2 * sqrt(log(N) / child->n));
-        if (ucb1 > best_ucb1) {
-            best_ucb1 = ucb1;
-            best_i = i;
-        }
-    }
-    return best_i;
-}
-
-void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        auto node = std::make_unique<Node>();
-        node->step = step;
-        node->board = new_board;
-        out.push_back(std::move(node));
-        return true;
-    });
-}
-
-size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node) {
-    if (node->board.phase == Phase::GameOver) {
-        size_t e = (player == node->board.player) ? 1 : 0;
-        node->w += e;
-        node->n += 1;
-        return e;
-    }
-
-    if (node->children.size() > 0) {
-        size_t i = ChooseChild(N, node->children);
-        size_t e = MCTS_Iteration(N, player, node->children[i]);
-        node->w += e;
-        node->n += 1;
-        return e;
-    }
-
-    if (node->n == 0) {
-        size_t e = Rollout(player, node->board);
-        node->w += e;
-        node->n += 1;
-        return e;
-    }
-
-    Expand(node->board, node->children);
-    Check(node->children.size() > 0);
-
-    auto& child = node->children[RandomInt(node->children.size(), Random())];
-    size_t e = MCTS_Iteration(N, player, child);
-    node->w += e;
-    node->n += 1;
-    return e;
-}
-
-optional<Step> TrivialStep(const Board& board) {
-    optional<Step> trivial_step;
-    size_t count = 0;
-    Action temp;
-    bool done = false;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
-        Check(!done);
-        if (new_board.phase == Phase::GameOver) {
-            if (new_board.player == board.player) {
-                trivial_step = action[0];
-                done = true;
-                return false;
-            }
-            return true;
-        }
-        // TODO check if opponent can win in one sequence!
-        trivial_step = (count == 0) ? optional{action[0]} : nullopt;
-        count += 1;
-        return true;
-    });
-    return trivial_step;
-}
-
-Step AutoMCTS(const Board& board, const size_t iterations, const bool trivial = false) {
-    if (trivial) {
-        auto a = TrivialStep(board);
-        if (a) return *a;
-    }
-
-    vector<std::unique_ptr<Node>> children;
-    Expand(board, children);
-    if (children.size() == 1) return children[0]->step;
-
-    for (size_t i = 0; i < iterations; i++) {
-        size_t ci = ChooseChild(i, children);
-        MCTS_Iteration(i, board.player, children[ci]);
-    }
-
-    double best_v = 0;
-    size_t best_i = 0;
-    for (size_t i = 0; i < children.size(); i++) {
-        double v = double(children[i]->w) / children[i]->n;
-        if (v > best_v) {
-            best_v = v;
-            best_i = i;
-        }
-    }
-    return children[best_i]->step;
 }
 
 double MiniMax(Figure player, const Board& board, int depth) {

@@ -3,16 +3,29 @@ load("//:library.bzl", "library")
 
 cc_library(
     name = "model",
-    hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h"],
+    hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h", "reservoir_sampler.h", "enumerator.h"],
     srcs = ["execute.cc", "board.cc"],
     deps = ["@absl//absl/container:flat_hash_map", "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor"],
 )
 
+cc_library(
+    name = "minimax",
+    hdrs = ["minimax.h"],
+    deps = [":model"],
+)
+
+cc_library(
+    name = "mcts",
+    hdrs = ["mcts.h"],
+    srcs = ["mcts.cc"],
+    deps = [":model", "//core:random"],
+)
+
 cc_binary(
     name = "santorini",
-    srcs = ["minimax.h", "santorini.cc"],
+    srcs = ["santorini.cc"],
     data = ["JetBrainsMono-Medium.ttf"],
-    deps = [":model",
+    deps = [":model", ":minimax", ":mcts",
             "//view:font", "//view:vertex_buffer", "//view:window",
             "//core:array_deque", "//core:callstack", "//core:vector", "//core:check", "//core:column", "//core:thread", "//core:model", "//core:string"],
 )
