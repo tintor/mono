@@ -26,13 +26,13 @@ cc_library(
     name = "mcts",
     hdrs = ["mcts.h"],
     srcs = ["mcts.cc"],
-    deps = [":model", "//core:random"],
+    deps = [":model", ":greedy", "//core:random"],
 )
 
 cc_library(
     name = "ui",
     srcs = ["ui.cc"],
-    deps = ["//view:font", "//view:vertex_buffer", "//view:window", "//core:random", ":model", ":minimax", ":mcts", ":greedy"],
+    deps = ["//view:font", "//view:vertex_buffer", "//view:window", "//core:random", "//core:timestamp", ":model", ":minimax", ":mcts", ":greedy"],
 )
 
 cc_binary(

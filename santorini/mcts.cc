@@ -5,6 +5,7 @@
 
 #include "santorini/enumerator.h"
 #include "santorini/reservoir_sampler.h"
+#include "santorini/greedy.h"
 #include "santorini/execute.h"
 
 using namespace std;
@@ -22,26 +23,21 @@ static std::mt19937_64& Random() {
 
 inline int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
 
+// Rollout board using AutoGreedy!
 static size_t Rollout(Figure player, Board board) {
-    auto& random = Random();
+    Action action;
     while (true) {
-        // Select step uniformly out of all possible action!
-        Step random_step;
-        ReservoirSampler sampler;
-        AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-            if (sampler(random)) random_step = step;
-            return true;
-        });
-
-        Check(Execute(board, random_step) == nullopt);
-        auto w = Winner(board);
-        if (w != Figure::None) return (w == player) ? 1 : 0;
+        action = AutoGreedy(board);
+        for (const Step& step : action) {
+            Check(Execute(board, step) == nullopt);
+            if (board.phase == Phase::GameOver) return (board.player == player) ? 1 : 0;
+        }
     }
 }
 
 struct Node {
-    Step step;
-    Board board;  // board state post-step
+    Action action;
+    Board board;  // board state post-action
     size_t w = 0;  // number of wins
     size_t n = 0;  // total number of rollouts (w/n is win ratio)
     vector<std::unique_ptr<Node>> children;
@@ -63,9 +59,9 @@ static size_t ChooseChild(size_t N, const vector<std::unique_ptr<Node>>& childre
 }
 
 static void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
+    AllValidActions(board, [&](Action& action, const Board& new_board) {
         auto node = std::make_unique<Node>();
-        node->step = step;
+        node->action = action;
         node->board = new_board;
         out.push_back(std::move(node));
         return true;
@@ -105,41 +101,30 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
     return e;
 }
 
-static optional<Step> TrivialStep(const Board& board) {
-    optional<Step> trivial_step;
-    size_t count = 0;
-    bool done = false;
+static optional<Action> WinAction(const Board& board) {
+    optional<Action> win_action;
     AllValidActions(board, [&](const Action& action, const Board& new_board) {
-        Check(!done);
-        if (new_board.phase == Phase::GameOver) {
-            if (new_board.player == board.player) {
-                trivial_step = action[0];
-                done = true;
-                return false;
-            }
-            return true;
+        if (new_board.phase == Phase::GameOver && new_board.player == board.player) {
+            win_action = action;
+            return false;
         }
-        // TODO check if opponent can win in one sequence!
-        trivial_step = (count == 0) ? optional{action[0]} : nullopt;
-        count += 1;
         return true;
     });
-    return trivial_step;
+    return win_action;
 }
 
-Step AutoMCTS(const Board& board, const size_t iterations, const bool trivial) {
-    if (trivial) {
-        auto a = TrivialStep(board);
-        if (a) return *a;
-    }
+Action AutoMCTS(const Board& board, const size_t iterations) {
+    auto wa = WinAction(board);
+    if (wa.has_value()) return wa.value();
 
     vector<std::unique_ptr<Node>> children;
     Expand(board, children);
-    if (children.size() == 1) return children[0]->step;
+    if (children.size() == 1) return children[0]->action;
 
     for (size_t i = 0; i < iterations; i++) {
         size_t ci = ChooseChild(i, children);
         MCTS_Iteration(i, board.player, children[ci]);
+        //if ((i + 1) % 100 == 0) print("{} mcts iterations\n", i + 1);
     }
 
     double best_v = 0;
@@ -151,5 +136,5 @@ Step AutoMCTS(const Board& board, const size_t iterations, const bool trivial) {
             best_i = i;
         }
     }
-    return children[best_i]->step;
+    return children[best_i]->action;
 }

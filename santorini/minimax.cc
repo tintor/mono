@@ -23,29 +23,17 @@ static std::mt19937_64& Random() {
     return random;
 }
 
-double MiniMax(Figure player, const Board& board, int depth) {
-    if (depth == 0) return ClimbRank(player, board);
-
-    double best_m = (board.player == player) ? -1e100 : 1e100;
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        double m = MiniMax(player, new_board, depth - 1);
-        if (board.player == player && m > best_m) best_m = m;
-        if (board.player != player && m < best_m) best_m = m;
-        return true;
-    });
-    return best_m;
-}
-
 // Plan:
 // - parallelize it (in MiniMaxValue, if depth = X then make every subcall in
 // - show progress during search (ie. number of calls to value())
 // - show N best moves with scores
 // - use time budget instead of max depth
+// - search in background (while human is thinking)
 
 const double kInfinity = std::numeric_limits<double>::infinity();
 
-// Return value of <initial_state>, from the perspective of <player>.
-double MiniMaxValue(const Figure player, const Board& initial_board, const int depth, const bool maximize, double alpha, double beta) {
+// Return value of <initial_board>, from the perspective of <player>.
+static double MiniMaxValue(const Figure player, const Board& initial_board, const int depth, const bool maximize, double alpha, double beta) {
     if (depth == 0 || initial_board.phase == Phase::GameOver) return ClimbRank(player, initial_board);
 
 
@@ -80,48 +68,32 @@ double MiniMaxValue(const Figure player, const Board& initial_board, const int d
     return best_m;
 }
 
-#if 0
-// Return action with the highest value (also return the value), from the perspective of <next_player>.
 Action AutoMiniMax(const Board& initial_board, const int depth) {
     Action best_action;
-    double best_score = -kInfinity;
+
+    size_t count = 0;
+    AllValidActions(initial_board, [&](const Action& action, const Board& board) {
+        best_action = action;
+        count += 1;
+        return count < 2;
+    });
+    if (count == 1) return best_action;
+
+    auto& random = Random();
+    double best_m = -kInfinity;
     double alpha = -kInfinity;
     double beta = kInfinity;
-    AllValidActions(initial_board, [&](Action& action, const Board& board) {
-        double m = MiniMaxValue(state, depth, /*maximize*/false, alpha, beta);
-        if (m > best_score) {
+    ReservoirSampler sampler;
+    AllValidActions(initial_board, [&](const Action& action, const Board& board) {
+        double m = MiniMaxValue(initial_board.player, board, depth, /*maximize*/false, alpha, beta);
+        if (m == best_m) {
+            if (sampler(random)) best_action = action;
+        } else if (m > best_m) {
+            sampler.count = 1;
             best_action = action;
-            best_score = m;
+            best_m = m;
         }
         return true;
     });
     return best_action;
-}
-#endif
-
-Step AutoMiniMax(const Board& board, const int depth) {
-    Step best_step;
-
-    size_t count = 0;
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        best_step = step;
-        count += 1;
-        return count < 2;
-    });
-    if (count == 1) return best_step;
-
-    auto& random = Random();
-    double best_score = -1e100;
-    ReservoirSampler sampler;
-    AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        double m = MiniMax(board.player, new_board, depth);
-        if (m == best_score && sampler(random)) best_step = step;
-        if (m > best_score) {
-            count = 1;
-            best_step = step;
-            best_score = m;
-        }
-        return true;
-    });
-    return best_step;
 }

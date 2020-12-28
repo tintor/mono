@@ -2,6 +2,7 @@
 
 #include "core/fmt.h"
 #include "core/random.h"
+#include "core/timestamp.h"
 
 #include "santorini/execute.h"
 #include "santorini/enumerator.h"
@@ -63,6 +64,8 @@ static void Play(optional<string_view> status) {
     }
 }
 
+Action g_ai_action;
+
 static void key_callback(GLFWwindow* window, int key, int scancode, int step, int mods) {
     if (step == GLFW_PRESS && key == GLFW_KEY_ESCAPE && mods == GLFW_MOD_SHIFT) {
         glfwSetWindowShouldClose(window, GL_TRUE);
@@ -78,30 +81,27 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int step, in
             g_history.pop_back();
         }
     }
-    if (step == GLFW_PRESS && key == GLFW_KEY_1) {
-        g_board_copy = g_board;
-        Step step = AutoRandom(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_2) {
-        g_board_copy = g_board;
-        Step step = AutoGreedy(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_3) {
-        g_board_copy = g_board;
-        Step step = AutoClimber(g_board);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_4) {
-        g_board_copy = g_board;
-        Step step = AutoMCTS(g_board, 10000);
-        Play(Execute(g_board, step));
-    }
-    if (step == GLFW_PRESS && key == GLFW_KEY_5) {
-        g_board_copy = g_board;
-        Step step = AutoMiniMax(g_board, 12);
-        Play(Execute(g_board, step));
+    if (g_ai_action.empty()) {
+        if (step == GLFW_PRESS && key == GLFW_KEY_1) {
+            g_board_copy = g_board;
+            g_ai_action = AutoRandom(g_board);
+        }
+        if (step == GLFW_PRESS && key == GLFW_KEY_2) {
+            g_board_copy = g_board;
+            g_ai_action = AutoGreedy(g_board);
+        }
+        if (step == GLFW_PRESS && key == GLFW_KEY_3) {
+            g_board_copy = g_board;
+            g_ai_action = AutoClimber(g_board);
+        }
+        if (step == GLFW_PRESS && key == GLFW_KEY_4) {
+            g_board_copy = g_board;
+            g_ai_action = AutoMCTS(g_board, 10000);
+        }
+        if (step == GLFW_PRESS && key == GLFW_KEY_5) {
+            g_board_copy = g_board;
+            g_ai_action = AutoMiniMax(g_board, 6);
+        }
     }
 }
 
@@ -260,9 +260,13 @@ static void Render(const Board& board, View& view) {
     view.mono.moveTo(10, 980);
     view.mono.m_scale = 13.0 / 48;
     view.mono.m_color = Color("FFFFFF");
-    view.mono.render(format("Player {}", PlayerName(board.player)));
-    if (board.moved) view.mono.render(" Moved");
-    if (board.built) view.mono.render(" Built");
+    if (board.phase == Phase::GameOver) {
+        view.mono.render(format("Player {} wins!", PlayerName(board.player)));
+    } else {
+        view.mono.render(format("Player {}", PlayerName(board.player)));
+        if (board.moved) view.mono.render(" Moved");
+        if (board.built) view.mono.render(" Built");
+    }
     glDisable(GL_BLEND);
 }
 
@@ -279,7 +283,13 @@ void RunUI() {
     View view;
     view.ortho = glm::ortho(0.0, double(Width), 0.0, double(Height));
 
+    Timestamp last_ai_step;
     RunEventLoop(window, [&]() {
+        if (g_ai_action.size() > 0 && last_ai_step.elapsed_ms() > 1000) {
+            Play(Execute(g_board, g_ai_action[0]));
+            g_ai_action.erase(g_ai_action.begin());
+            last_ai_step = Timestamp();
+        }
         glClear(GL_COLOR_BUFFER_BIT);
         Render(g_board, view);
     });

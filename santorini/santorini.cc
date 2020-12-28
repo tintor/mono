@@ -62,18 +62,21 @@ int Argmax(std::mt19937_64& random, cspan<T> values) {
 // Benchmarks and training
 // -----------------------
 
-using Policy = std::function<Step(const Board&)>;
+using Policy = std::function<Action(const Board&)>;
 
 Figure Battle(const Policy& policy_a, const Policy& policy_b) {
     Board board;
     while (true) {
-        auto w = Winner(board);
-        if (w != Figure::None) return w;
+        if (board.phase == Phase::GameOver) return board.player;
         const Policy& policy = (board.player == Figure::Player1) ? policy_a : policy_b;
-        auto s = Execute(board, policy(board));
-        if (s != nullopt) {
-            print("faul\n");
-            return Other(board.player);
+        Action action = policy(board);
+        for (const Step& step : action) {
+            auto s = Execute(board, step);
+            if (s != nullopt) {
+                print("faul\n");
+                return Other(board.player);
+            }
+            if (board.phase == Phase::GameOver || std::holds_alternative<NextStep>(step)) break;
         }
     }
 }
@@ -83,9 +86,10 @@ const std::unordered_map<string_view, Policy> g_policies = {
     {"greedy", AutoGreedy},
     {"climber", AutoClimber},
     {"mcts100", [](const auto& e) { return AutoMCTS(e, 100); }},
-    {"mcts100t", [](const auto& e) { return AutoMCTS(e, 100, true); }},
     {"mcts200", [](const auto& e) { return AutoMCTS(e, 200); }},
     {"mcts400", [](const auto& e) { return AutoMCTS(e, 400); }},
+    {"mcts800", [](const auto& e) { return AutoMCTS(e, 800); }},
+    {"mcts1600", [](const auto& e) { return AutoMCTS(e, 1600); }},
     {"minimax6", [](const auto& e) { return AutoMiniMax(e, 6); }},
     {"minimax9", [](const auto& e) { return AutoMiniMax(e, 9); }},
     {"minimax12", [](const auto& e) { return AutoMiniMax(e, 12); }}};
@@ -295,31 +299,11 @@ private:
 };
 
 struct RandomAgent : public Agent {
-    Action Play(const Board& board) override {
-        Action action;
-        Board my_board = board;
-        while (true) {
-            Step step = AutoRandom(my_board);
-            action << step;
-            Execute(my_board, step);
-            if (std::holds_alternative<NextStep>(step) || Winner(my_board) != Figure::None) break;
-        }
-        return action;
-    }
+    Action Play(const Board& board) override { return AutoRandom(board); }
 };
 
 struct GreedyAgent : public Agent {
-    Action Play(const Board& board) override {
-        Action action;
-        Board my_board = board;
-        while (true) {
-            Step step = AutoGreedy(my_board);
-            action << step;
-            Execute(my_board, step);
-            if (std::holds_alternative<NextStep>(step) || Winner(my_board) != Figure::None) break;
-        }
-        return action;
-    }
+    Action Play(const Board& board) override { return AutoGreedy(board); }
 };
 
 // Plan:
@@ -373,7 +357,7 @@ Figure PlayOneGame(Board board, Agent& agent_a, Agent& agent_b, Values& values, 
         Agent& agent = (board.player == Figure::Player1) ? static_cast<Agent&>(agent_a) : static_cast<Agent&>(agent_b);
 
         bool eot = false;
-        for (Step step : agent.Play(board)) {
+        for (const Step& step : agent.Play(board)) {
             if (eot) Fail("invalid step after end of turn");
             auto s = Execute(board, step);
             if (s != nullopt) Fail(format("invalid step {}", s));
@@ -521,14 +505,38 @@ int main(int argc, char** argv) {
     }
 
     if (argc > 1) {
-        AutoBattle(100, "climber", "minimax12");
+        AutoBattle(100, "random", "greedy");
+        AutoBattle(100, "random", "climber");
+        AutoBattle(100, "greedy", "climber");
+
+        AutoBattle(100, "random", "mcts100");
+        AutoBattle(100, "greedy", "mcts100");
+        AutoBattle(100, "climber", "mcts100");
+
+        AutoBattle(100, "random", "mcts200");
+        AutoBattle(100, "greedy", "mcts200");
+        AutoBattle(100, "climber", "mcts200");
+
+        AutoBattle(100, "random", "mcts400");
+        AutoBattle(100, "greedy", "mcts400");
+        AutoBattle(100, "climber", "mcts400");
+
+        AutoBattle(100, "random", "mcts800");
+        AutoBattle(100, "greedy", "mcts800");
+        AutoBattle(100, "climber", "mcts800");
+
+        AutoBattle(100, "random", "mcts1600");
+        AutoBattle(100, "greedy", "mcts1600");
+        AutoBattle(100, "climber", "mcts1600");
+
+        /*AutoBattle(100, "climber", "minimax12");
         AutoBattle(1000, "mcts100", "mcts100t");
         AutoBattle(100, "minimax6", "minimax9");
         AutoBattle(100, "climber", "minimax9");
         AutoBattle(100, "climber", "minimax6");
         AutoBattle(100, "climber", "mcts100");
         AutoBattle(100, "climber", "mcts200");
-        AutoBattle(100, "climber", "mcts400");
+        AutoBattle(100, "climber", "mcts400");*/
         return 0;
     }
 
