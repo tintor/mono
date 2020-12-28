@@ -61,10 +61,9 @@ Step AutoRandom(const Board& board) {
 
 Step AutoGreedy(const Board& board) {
     auto& random = Random();
-    Action temp;
     Step choice;
     ReservoirSampler sampler;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
+    AllValidActions(board, [&](const Action& action, const Board& new_board) {
         // Print(action);
         if (new_board.phase == Phase::GameOver && new_board.player == board.player) {
             choice = action[0];
@@ -79,8 +78,11 @@ Step AutoGreedy(const Board& board) {
 }
 
 const double Pow10[] = {1, 10, 100, 1000};
+const double kInfinity = std::numeric_limits<double>::infinity();
 
 double ClimbRank(Figure player, const Board& board) {
+    if (board.phase == Phase::GameOver) return (player == board.player) ? kInfinity : -kInfinity;
+
     double rank = 0;
     for (Coord e : kAll) {
         if (board(e).figure == player) rank += Pow10[int(board(e).level)];
@@ -98,11 +100,10 @@ double ClimbRank(Figure player, const Board& board) {
 
 Step AutoClimber(const Board& board) {
     auto& random = Random();
-    Action temp;
     Step choice;
     ReservoirSampler sampler;
     double best_rank = -1e100;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
+    AllValidActions(board, [&](const Action& action, const Board& new_board) {
         // Print(action);
         if (new_board.phase == Phase::GameOver) {
             if (new_board.player == board.player) {

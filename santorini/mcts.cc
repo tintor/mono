@@ -108,9 +108,8 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
 static optional<Step> TrivialStep(const Board& board) {
     optional<Step> trivial_step;
     size_t count = 0;
-    Action temp;
     bool done = false;
-    AllValidStepSequences(board, temp, [&](const Action& action, const Board& new_board) {
+    AllValidActions(board, [&](const Action& action, const Board& new_board) {
         Check(!done);
         if (new_board.phase == Phase::GameOver) {
             if (new_board.player == board.player) {

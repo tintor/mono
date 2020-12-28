@@ -1,16 +1,10 @@
 #pragma once
-#include <random>
-#include <variant>
-#include <iostream>
-
 #include "santorini/execute.h"
-
-using namespace std;
 
 template <typename Visitor>
 bool Visit(const Board& board, const Step& step, const Visitor& visit) {
     Board my_board = board;
-    if (Execute(my_board, step) != nullopt) return true;
+    if (Execute(my_board, step) != std::nullopt) return true;
     return visit(my_board, step);
 }
 
@@ -36,15 +30,18 @@ bool AllValidSteps(const Board& board, const Visitor& visit) {
 }
 
 template <typename Visitor>
-bool AllValidStepSequences(const Board& board, Action& temp, const Visitor& visit) {
+bool AllValidActions(const Board& board, const Visitor& visit, Action* temp = nullptr) {
+    Action _temp;
+    if (!temp) temp = &_temp;
+
     return AllValidSteps(board, [&](const Board& new_board, const Step& step) {
-        temp.push_back(step);
+        temp->push_back(step);
         if (std::holds_alternative<NextStep>(step) || new_board.phase == Phase::GameOver) {
-            if (!visit(temp, new_board)) return false;
+            if (!visit(*temp, new_board)) return false;
         } else {
-            if (!AllValidStepSequences(new_board, temp, visit)) return false;
+            if (!AllValidActions(new_board, visit, temp)) return false;
         }
-        temp.pop_back();
+        temp->pop_back();
         return true;
     });
 }

@@ -17,9 +17,9 @@ cc_library(
 
 cc_library(
     name = "minimax",
-    hdrs = ["minimax.h", "minimax_generic.h"],
+    hdrs = ["minimax.h"],
     srcs = ["minimax.cc"],
-    deps = [":greedy"],
+    deps = [":greedy", "//core:vector"],
 )
 
 cc_library(

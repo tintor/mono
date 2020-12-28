@@ -228,7 +228,7 @@ public:
         vector<MiniBoard> all_boards;
         vector<Action> all_action;
 
-        AllValidStepSequences(board, _temp, [&](Action& action, const Board& new_board) {
+        AllValidActions(board, [&](Action& action, const Board& new_board) {
             all_boards << static_cast<MiniBoard>(new_board);
             all_action << action;
             return true;
@@ -254,7 +254,7 @@ public:
                 float max_q = 0;
                 if (next_state.has_value()) {
                     max_q = -1;
-                    AllValidStepSequences(next_state.value(), _temp, [&](Action& action, const Board& new_board) {
+                    AllValidActions(next_state.value(), [&](Action& action, const Board& new_board) {
                         auto winner = Winner(new_board);
                         if (winner == ego) {
                           max_q = 1;
@@ -292,7 +292,6 @@ private:
 
     // Cached vectors to avoid reallocation.
     vector<pair<MiniBoard, float>> _xy;
-    Action _temp;
 };
 
 struct RandomAgent : public Agent {
@@ -468,9 +467,8 @@ void Browse(const Values& values) {
     while (true) {
         print("\n");
         Render(stack.back());
-        Action temp;
         vector<Board> options;
-        AllValidStepSequences(stack.back(), temp, [&](Action& action, const Board& new_board) {
+        AllValidActions(stack.back(), [&](Action& action, const Board& new_board) {
             if (values.Lookup(new_board).has_value()) options.push_back(new_board);
             return true;
         });
