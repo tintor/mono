@@ -123,6 +123,10 @@ optional<string_view> CanBuild(const Board& board, Coord dest, bool dome) {
     if (card == Card::Demeter) {
         if (board.builds == 2) return "Demeter can't build more than twice";
         if (board.builds == 1 && dest == *board.build) return "Demeter can't build twice on the same square";
+    } else if (card == Card::Hephaestus) {
+        if (board.builds == 2) return "Hephaestus can't build more than twice";
+        if (board.builds == 1 && dest != *board.build) return "Hephaestus can't build on two different squares";
+        if (board.builds == 1 && board(dest).level == 3 && dome) return "Hephaestus can't build dome on top of its first block";
     } else {
         if (board.builds == 1) return "already built";
     }

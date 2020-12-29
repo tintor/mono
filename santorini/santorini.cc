@@ -513,6 +513,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    RunUI(Card::None, Card::Athena);
+    RunUI(Card::None, Card::Hephaestus);
     return 0;
 }
