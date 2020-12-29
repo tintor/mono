@@ -62,7 +62,7 @@ static double MiniMaxValue(const Figure player, const Board& initial_board, cons
     return best_m;
 }
 
-Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2) {
+Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2, bool extra) {
     Action best_action;
 
     size_t count = 0;
@@ -80,6 +80,11 @@ Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2) {
     ReservoirSampler sampler;
     AllValidBoards(initial_board, [&](const Action& action, const Board& board) {
         double m = MiniMaxValue(initial_board.player, board, depth, /*maximize*/false, alpha, beta, climber2);
+        if (extra && m == kInfinity) {
+            best_m = m;
+            best_action = action;
+            return false;
+        }
         if (m == best_m) {
             if (sampler(random)) best_action = action;
         } else if (m > best_m) {

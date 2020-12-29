@@ -25,7 +25,7 @@ optional<string_view> CanNext(const Board& board) {
         return nullopt;
     }
     if (!board.moved) return "need to move";
-    if (!board.built) return "need to build";
+    if (!board.build) return "need to build";
     return nullopt;
 }
 
@@ -34,9 +34,10 @@ optional<string_view> Next(Board& board) {
     if (s != nullopt) return s;
     board.player = Other(board.player);
     board.moved = std::nullopt;
-    board.built = false;
+    board.build = std::nullopt;
     board.artemis_move_src = std::nullopt;
-    board.artemis_moves = 0;
+    board.moves = 0;
+    board.builds = 0;
 
     if (board.phase == Phase::PlaceWorker) {
         if (Count(board, L(e.figure != Figure::None)) == 4) board.phase = Phase::MoveBuild;
@@ -69,9 +70,9 @@ optional<string_view> CanMove(const Board& board, Coord src, Coord dest) {
     if (board.phase != Phase::MoveBuild) return "bad phase";
 
     if (board.my_card() == Card::Artemis) {
-        if (board.built) return "Artemis can't move after building";
-        if (board.artemis_moves == 2) return "Artemis moved twice already";
-        if (board.artemis_moves == 1 && src != *board.moved) return "Artemis can't move both workers";
+        if (board.build) return "Artemis can't move after building";
+        if (board.moves == 2) return "Artemis moved twice already";
+        if (board.moves == 1 && src != *board.moved) return "Artemis can't move both workers";
         if (board.artemis_move_src && dest == *board.artemis_move_src) return "Artemis can't move back to initial position";
     } else {
         if (board.moved) return "moved already";
@@ -97,23 +98,29 @@ optional<string_view> Move(Board& board, Coord src, Coord dest) {
     board(src).figure = board(dest).figure;  // Swap in case of Apollo.
     board(dest).figure = board.player;
     board.moved = dest;
+    board.moves += 1;
 
-    if (board.my_card() == Card::Artemis) {
-        board.artemis_moves += 1;
-        if (!board.artemis_move_src) board.artemis_move_src = src;
-    }
+    if (board.my_card() == Card::Artemis && !board.artemis_move_src) board.artemis_move_src = src;
 
     if (board(dest).level == 3) board.phase = Phase::GameOver;
     return nullopt;
 }
 
 optional<string_view> CanBuild(const Board& board, Coord dest, bool dome) {
+    const Card card = board.my_card();
     if (!IsValid(dest)) return "invalid coord";
     if (board.phase != Phase::MoveBuild) return "bad phase";
     if (!board.moved) return "need to move";
-    if (board.built) return "already built";
+
+    if (card == Card::Demeter) {
+        if (board.builds == 2) return "Demeter can't build more than twice";
+        if (board.builds == 1 && dest == *board.build) return "Demeter can't build twice on the same square";
+    } else {
+        if (board.builds == 1) return "already built";
+    }
+
     if (board(dest).figure != Figure::None) return "can only build on empty space";
-    if (dome && board(dest).level != 3 && board.my_card() != Card::Atlas) return "dome can only be built on level 3";
+    if (dome && board(dest).level != 3 && card != Card::Atlas) return "dome can only be built on level 3";
     if (!dome && board(dest).level == 3) return "floor can only be built on levels 0, 1 and 2";
     if (!Nearby(*board.moved, dest)) return "can only build near moved figure";
     return nullopt;
@@ -124,7 +131,8 @@ optional<string_view> Build(Board& board, Coord dest, bool dome) {
     if (s != nullopt) return s;
     if (dome) board(dest).figure = Figure::Dome;
     if (!dome) board(dest).level += 1;
-    board.built = true;
+    board.build = dest;
+    board.builds += 1;
     return nullopt;
 }
 

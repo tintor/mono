@@ -33,7 +33,7 @@ bool AllValidSteps(const Board& board, const Visitor& visit) {
             }
             return true;
         }
-        if (!board.built) {
+        if (!board.build) {
             // Generate builds
             // TODO Only iterate nearby board.moved.value()!
             for (Coord d : kAll) if (d != *board.moved && Nearby(*board.moved, d) && board(d).figure == Figure::None) {

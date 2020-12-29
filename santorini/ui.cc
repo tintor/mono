@@ -270,7 +270,7 @@ static void Render(const Board& board, View& view) {
     } else {
         view.mono.render(format("Player {}", PlayerName(board.player)));
         if (board.moved) view.mono.render(" Moved");
-        if (board.built) view.mono.render(" Built");
+        if (board.build) view.mono.render(" Built");
         view.mono.render(format(" {} vs {}", CardName(board.my_card()), CardName(board.opp_card())));
     }
     glDisable(GL_BLEND);

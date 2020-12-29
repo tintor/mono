@@ -85,6 +85,11 @@ minimax4 82 : 118 minimax3x
 minimax3 32 : 168 minimax3x
 minimax2x 33 : 167 minimax3x
 
+minimax4 82 : 118 minimax3x
+minimax3 32 : 168 minimax3x
+minimax2x 33 : 167 minimax3x
+minimax4 27 : 173 minimax4x
+
 Ranking:
 random
 greedy (9x better than random)
@@ -107,7 +112,6 @@ minimax1x
 minimax2 (19x better than minimax1, 2.2x better than climber2)
 minimax3 (7.3x better than minimax2, 9x better than climber2)
 minimax2x (1.6x better than minimax3, 6.4x better than minimax2, 7x better than minimax1x)
-~
 minimax4
 minimax3x (1.4x better than minimax4, 5.2x better than minimax3, 5.1x better than minimax2)
-minimax4x
+minimax4x (6.4x better than minimax4)

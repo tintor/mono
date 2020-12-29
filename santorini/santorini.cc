@@ -44,8 +44,10 @@ int Argmax(std::mt19937_64& random, cspan<T> values) {
 // Benchmarks and training
 // -----------------------
 
-Figure Battle(const Policy& policy_a, const Policy& policy_b) {
+Figure Battle(const Policy& policy_a, const Policy& policy_b, Card card_a, Card card_b) {
     Board board;
+    board.card1 = card_a;
+    board.card2 = card_b;
     while (true) {
         if (board.phase == Phase::GameOver) return board.player;
         const Policy& policy = (board.player == Figure::Player1) ? policy_a : policy_b;
@@ -90,11 +92,12 @@ const std::unordered_map<string_view, Policy> g_policies = {
     {"minimax4", MiniMax(4)},
     {"minimax1x", MiniMax(1, true)},
     {"minimax2x", MiniMax(2, true)},
+    {"minimax2xe", MiniMax(2, true, false)},
     {"minimax3x", MiniMax(3, true)},
     {"minimax4x", MiniMax(4, true)},
 };
 
-void AutoBattle(int count, string_view name_a, string_view name_b) {
+void AutoBattle(int count, string_view name_a, string_view name_b, Card card_a = Card::None, Card card_b = Card::None) {
     const Policy& policy_a = g_policies.at(name_a);
     const Policy& policy_b = g_policies.at(name_b);
     atomic<int> wins_a = 0, wins_b = 0;
@@ -105,7 +108,7 @@ void AutoBattle(int count, string_view name_a, string_view name_b) {
         while (!stop) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             FOR(j, message.size()) cout << '\r';
-            message = format("{} {} : {} {}", name_a, wins_a, wins_b, name_b);
+            message = format("{} {} {} : {} {} {}", name_a, CardName(card_a), wins_a, wins_b, name_b, CardName(card_b));
             cout << message;
             cout.flush();
         }
@@ -113,11 +116,11 @@ void AutoBattle(int count, string_view name_a, string_view name_b) {
     });
 
     parallel_for(count, [&](size_t i) {
-        if (Battle(policy_a, policy_b) == Figure::Player1)
+        if (Battle(policy_a, policy_b, card_a, card_b) == Figure::Player1)
             wins_a += 1;
         else
             wins_b += 1;
-        if (Battle(policy_b, policy_a) == Figure::Player1)
+        if (Battle(policy_b, policy_a, card_b, card_a) == Figure::Player1)
             wins_b += 1;
         else
             wins_a += 1;
@@ -505,16 +508,10 @@ int main(int argc, char** argv) {
     }
 
     if (argc > 1) {
-        AutoBattle(100, "mcts200c2", "minimax1");
-        AutoBattle(100, "mcts400c2", "minimax1");
-        AutoBattle(100, "mcts800c2", "minimax1");
-        AutoBattle(100, "mcts1600c2", "minimax1");
-        AutoBattle(100, "mcts3200c2", "minimax1");
-        AutoBattle(100, "mcts6400c2", "minimax1");
-        AutoBattle(100, "mcts12800c2", "minimax1");
+        AutoBattle(100, "minimax2xe", "minimax2x", Card::Demeter, Card::Demeter);
         return 0;
     }
 
-    RunUI(Card::Atlas, Card::Artemis);
+    RunUI(Card::Demeter, Card::Demeter);
     return 0;
 }

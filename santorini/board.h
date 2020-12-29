@@ -31,10 +31,10 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
-enum class Card { None, Apollo, Artemis, Atlas };
+enum class Card { None, Apollo, Artemis, Atlas, Demeter };
 
 inline bool DeduplicateBoards(Card c) {
-    return c == Card::Artemis;
+    return c == Card::Artemis || c == Card::Demeter;
 }
 
 inline std::string_view CardName(Card c) {
@@ -42,6 +42,7 @@ inline std::string_view CardName(Card c) {
     if (c == Card::Apollo) return "Apollo";
     if (c == Card::Artemis) return "Artemis";
     if (c == Card::Atlas) return "Atlas";
+    if (c == Card::Demeter) return "Demeter";
     Check(false);
     return "";
 }
@@ -57,16 +58,17 @@ struct Board : public MiniBoard {
 
     // Inner action state
     std::optional<Coord> moved;
-    bool built = false;
+    std::optional<Coord> build;
 
-    int artemis_moves = 0;
+    int moves = 0;
+    int builds = 0;
     std::optional<Coord> artemis_move_src;
 
     const Cell& operator()(Coord c) const { return cell[c.v]; }
     Cell& operator()(Coord c) { return cell[c.v]; }
 
     bool operator==(const Board& b) const {
-        return phase == b.phase && player == b.player && moved == b.moved && built == b.built && cell == b.cell;
+        return phase == b.phase && player == b.player && moved == b.moved && build == b.build && cell == b.cell;
     }
 };
 
@@ -90,7 +92,7 @@ inline std::ostream& operator<<(std::ostream& os, const Board& board) {
     char p[2] = {char(board.player), 0};
     os << format("phase {}, player {}", board.phase, p);
     if (board.moved) os << format(" moved {}{}", board.moved->x(), board.moved->y());
-    os << format(" built {}", board.built) << std::endl;
+    if (board.build) os << format(" build {}{}", board.build->x(), board.build->y()) << std::endl;
     return os;
 }
 
