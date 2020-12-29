@@ -12,7 +12,8 @@ cc_library(
     name = "model",
     hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h", "reservoir_sampler.h", "enumerator.h", "policy.h"],
     srcs = ["execute.cc", "board.cc"],
-    deps = ["@absl//absl/container:flat_hash_map", "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor", ":random"],
+    deps = ["@absl//absl/container:flat_hash_map", "@absl//absl/container:flat_hash_set",
+            "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor", ":random"],
 )
 
 cc_library(

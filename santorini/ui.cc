@@ -97,15 +97,15 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int step, in
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_4) {
             g_board_copy = g_board;
-            g_ai_action = AutoMCTS(g_board, 3200, true);
+            g_ai_action = QuickStart(MCTS(3200, true))(g_board);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_5) {
             g_board_copy = g_board;
-            g_ai_action = AutoMiniMax(g_board, 2, true);
+            g_ai_action = QuickStart(MiniMax(1, true))(g_board);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_5) {
             g_board_copy = g_board;
-            g_ai_action = AutoMiniMax(g_board, 4, true);
+            g_ai_action = QuickStart(MiniMax(4, true))(g_board);
         }
     }
 }

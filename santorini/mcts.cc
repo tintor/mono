@@ -49,7 +49,7 @@ static size_t ChooseChild(size_t N, const vector<std::unique_ptr<Node>>& childre
 }
 
 static void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
-    AllValidActions(board, [&](Action& action, const Board& new_board) {
+    AllValidBoards(board, [&](Action& action, const Board& new_board) {
         auto node = std::make_unique<Node>();
         node->action = action;
         node->board = new_board;
@@ -93,7 +93,7 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
 
 static optional<Action> WinAction(const Board& board) {
     optional<Action> win_action;
-    AllValidActions(board, [&](const Action& action, const Board& new_board) {
+    AllValidBoards(board, [&](const Action& action, const Board& new_board) {
         if (new_board.phase == Phase::GameOver && new_board.player == board.player) {
             win_action = action;
             return false;

@@ -1,5 +1,6 @@
 #pragma once
 #include "santorini/execute.h"
+#include "absl/container/flat_hash_set.h"
 
 template <typename Visitor>
 bool Visit(const Board& board, const Step& step, const Visitor& visit) {
@@ -56,8 +57,9 @@ bool AllValidSteps(const Board& board, const Visitor& visit) {
     return true;
 }
 
+// Can return duplicate boards.
 template <typename Visitor>
-bool AllValidActions(const Board& board, const Visitor& visit, Action* temp = nullptr) {
+bool _AllValidActions(const Board& board, const Visitor& visit, Action* temp = nullptr) {
     Action _temp;
     if (!temp) temp = &_temp;
 
@@ -66,9 +68,22 @@ bool AllValidActions(const Board& board, const Visitor& visit, Action* temp = nu
         if (std::holds_alternative<NextStep>(step) || new_board.phase == Phase::GameOver) {
             if (!visit(*temp, new_board)) return false;
         } else {
-            if (!AllValidActions(new_board, visit, temp)) return false;
+            if (!_AllValidActions(new_board, visit, temp)) return false;
         }
         temp->pop_back();
         return true;
     });
+}
+
+// Deduplicates boards (if needed).
+template <typename Visitor>
+bool AllValidBoards(const Board& board, const Visitor& visit) {
+    if (DeduplicateBoards(board.card1) || DeduplicateBoards(board.card2)) {
+        // Return only unique boards.
+        absl::flat_hash_set<MiniBoard> boards;
+        return _AllValidActions(board, [&visit, &boards](Action& action, const Board& new_board) {
+            return !boards.emplace(new_board).second || visit(action, new_board);
+        });
+    }
+    return _AllValidActions(board, visit);
 }

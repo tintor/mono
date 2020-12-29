@@ -31,11 +31,16 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
-enum class Card { None, Apollo };
+enum class Card { None, Apollo, Artemis };
+
+inline bool DeduplicateBoards(Card c) {
+    return c == Card::Artemis;
+}
 
 inline std::string_view CardName(Card c) {
     if (c == Card::None) return "none";
     if (c == Card::Apollo) return "Apollo";
+    if (c == Card::Artemis) return "Artemis";
     Check(false);
     return "";
 }
@@ -52,6 +57,9 @@ struct Board : public MiniBoard {
     // Inner action state
     std::optional<Coord> moved;
     bool built = false;
+
+    int artemis_moves = 0;
+    std::optional<Coord> artemis_move_src;
 
     const Cell& operator()(Coord c) const { return cell[c.v]; }
     Cell& operator()(Coord c) { return cell[c.v]; }

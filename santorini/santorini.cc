@@ -232,7 +232,7 @@ public:
         vector<MiniBoard> all_boards;
         vector<Action> all_action;
 
-        AllValidActions(board, [&](Action& action, const Board& new_board) {
+        AllValidBoards(board, [&](Action& action, const Board& new_board) {
             all_boards << static_cast<MiniBoard>(new_board);
             all_action << action;
             return true;
@@ -258,7 +258,7 @@ public:
                 float max_q = 0;
                 if (next_state.has_value()) {
                     max_q = -1;
-                    AllValidActions(next_state.value(), [&](Action& action, const Board& new_board) {
+                    AllValidBoards(next_state.value(), [&](Action& action, const Board& new_board) {
                         auto winner = Winner(new_board);
                         if (winner == ego) {
                           max_q = 1;
@@ -452,7 +452,7 @@ void Browse(const Values& values) {
         print("\n");
         Render(stack.back());
         vector<Board> options;
-        AllValidActions(stack.back(), [&](Action& action, const Board& new_board) {
+        AllValidBoards(stack.back(), [&](Action& action, const Board& new_board) {
             if (values.Lookup(new_board).has_value()) options.push_back(new_board);
             return true;
         });
@@ -515,6 +515,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    RunUI(Card::Apollo, Card::Apollo);
+    RunUI(Card::Apollo, Card::Artemis);
     return 0;
 }

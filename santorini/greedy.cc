@@ -40,7 +40,7 @@ Action AutoRandom(const Board& board) {
     auto& random = Random();
     ReservoirSampler sampler;
     Action choice;
-    AllValidActions(board, [&](const Action& action, const Board& new_board) {
+    AllValidBoards(board, [&](const Action& action, const Board& new_board) {
         if (sampler(random)) choice = action;
         return true;
     });
@@ -52,7 +52,7 @@ Action AutoGreedy(const Board& board) {
     Action choice;
     Action loose_choice;
     ReservoirSampler sampler;
-    AllValidActions(board, [&](const Action& action, const Board& new_board) {
+    AllValidBoards(board, [&](const Action& action, const Board& new_board) {
         if (new_board.phase == Phase::GameOver && new_board.player == board.player) {
             choice = action;
             sampler.count = 1;
@@ -128,7 +128,7 @@ Action AutoClimber(const Board& board, const Weights& weights) {
     Action choice;
     ReservoirSampler sampler;
     double best_rank = -kInfinity;
-    AllValidActions(board, [&](const Action& action, const Board& new_board) {
+    AllValidBoards(board, [&](const Action& action, const Board& new_board) {
         if (new_board.phase == Phase::GameOver) {
             if (new_board.player == board.player) {
                 choice = action;

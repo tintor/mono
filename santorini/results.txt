@@ -74,8 +74,16 @@ mcts400c2 140 : 60 climber2
 mcts1600c2 148 : 52 climber2
 
 mcts100c2 73 : 127 minimax1
+mcts200c2 89 : 111 minimax1
+mcts400c2 82 : 118 minimax1
+mcts800c2 91 : 109 minimax1
+mcts1600c2 95 : 105 minimax1
+mcts3200c2 102 : 98 minimax1
+mcts6400c2 113 : 87 minimax1
 
 minimax4 82 : 118 minimax3x
+minimax3 32 : 168 minimax3x
+minimax2x 33 : 167 minimax3x
 
 Ranking:
 random
@@ -90,13 +98,16 @@ mcts3200
 mcts6400
 mcts12800
 climber2 (3x better than mcts1600, slightly better than mcts6400, 2x better than mcts3200)
-mcts100c2 ?
-mcts1600c2 ?
-minimax1 (slightly better than climber2)
+mcts100c2
+mcts1600c2
+mcts3200c2
+minimax1 (slightly better than climber2, same as mcts3200c2)
+mcts640c2
 minimax1x
 minimax2 (19x better than minimax1, 2.2x better than climber2)
 minimax3 (7.3x better than minimax2, 9x better than climber2)
 minimax2x (1.6x better than minimax3, 6.4x better than minimax2, 7x better than minimax1x)
 ~
 minimax4
-minimax3x (1.4x better than minimax4)
+minimax3x (1.4x better than minimax4, 5.2x better than minimax3, 5.1x better than minimax2)
+minimax4x

@@ -31,7 +31,7 @@ static double MiniMaxValue(const Figure player, const Board& initial_board, cons
 
 
     vector<pair<double, Board>> boards;
-    AllValidActions(initial_board, [&boards, player, &weights](Action& action, const Board& board) {
+    AllValidBoards(initial_board, [&boards, player, &weights](Action& action, const Board& board) {
         boards << pair{ClimbRank(player, board, weights), board};
         return true;
     });
@@ -66,7 +66,7 @@ Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2) {
     Action best_action;
 
     size_t count = 0;
-    AllValidActions(initial_board, [&](const Action& action, const Board& board) {
+    AllValidBoards(initial_board, [&](const Action& action, const Board& board) {
         best_action = action;
         count += 1;
         return count < 2;
@@ -78,7 +78,7 @@ Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2) {
     double alpha = -kInfinity;
     double beta = kInfinity;
     ReservoirSampler sampler;
-    AllValidActions(initial_board, [&](const Action& action, const Board& board) {
+    AllValidBoards(initial_board, [&](const Action& action, const Board& board) {
         double m = MiniMaxValue(initial_board.player, board, depth, /*maximize*/false, alpha, beta, climber2);
         if (m == best_m) {
             if (sampler(random)) best_action = action;
