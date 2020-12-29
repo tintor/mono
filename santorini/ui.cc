@@ -96,11 +96,11 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int step, in
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_4) {
             g_board_copy = g_board;
-            g_ai_action = AutoMCTS(g_board, 10000);
+            g_ai_action = AutoMCTS(g_board, 100000);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_5) {
             g_board_copy = g_board;
-            g_ai_action = AutoMiniMax(g_board, 6);
+            g_ai_action = AutoMiniMax(g_board, 4);
         }
     }
 }

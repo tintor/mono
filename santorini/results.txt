@@ -1,0 +1,81 @@
+Dec 28th, 2020:
+random 19 : 181 greedy
+random 2 : 198 climber
+greedy 16 : 184 climber
+random 0 : 200 mcts100
+greedy 13 : 187 mcts100
+climber 66 : 134 mcts100
+random 0 : 200 mcts200
+greedy 5 : 195 mcts200
+climber 53 : 147 mcts200
+random 0 : 200 mcts400
+greedy 2 : 198 mcts400
+climber 60 : 140 mcts400
+random 1 : 199 mcts800
+greedy 3 : 197 mcts800
+climber 76 : 124 mcts800
+random 0 : 200 mcts1600
+greedy 6 : 194 mcts1600
+climber 79 : 121 mcts1600
+
+climber 19 : 181 climber2
+random 0 : 200 climber2
+greedy 1 : 199 climber2
+climber2 172 : 28 mcts100
+climber2 164 : 36 mcts200
+climber2 155 : 45 mcts400
+climber2 145 : 55 mcts800
+climber2 152 : 48 mcts1600
+
+random 0 : 200 minimax1
+greedy 0 : 200 minimax1
+climber 9 : 191 minimax1
+climber2 96 : 104 minimax1
+mcts100 46 : 154 minimax1
+mcts200 39 : 161 minimax1
+mcts400 61 : 139 minimax1
+mcts800 62 : 138 minimax1
+mcts1600 73 : 127 minimax1
+
+climber2 926 : 1074 minimax1
+
+climber 1 : 199 minimax2
+mcts800 4 : 196 minimax2
+mcts1600 16 : 184 minimax2
+climber2 61 : 139 minimax2
+minimax1 10 : 190 minimax2
+
+mcts1600 4 : 196 minimax3
+climber2 19 : 181 minimax3
+minimax1 16 : 184 minimax3
+minimax2 24 : 176 minimax3
+
+climber 1 : 199 minimax1x
+climber2 36 : 164 minimax1x
+minimax1 25 : 175 minimax1x
+mcts1600 19 : 181 minimax1x
+
+minimax2 121 : 79 minimax1x
+minimax3 142 : 58 minimax1x
+mcts3200 15 : 185 minimax1x
+
+minimax2x 123 : 77 minimax3
+minimax2x 173 : 27 minimax2
+minimax2x 175 : 25 minimax1x
+minimax2x 199 : 1 minimax1
+
+Ranking:
+random
+greedy (9x better than random)
+climber (9x better than greedy)
+mcts100 (2x better than climber)
+mcts200
+mcts400
+mcts800
+mcts1600
+climber2 (3x better than mcts1600)
+minimax1 (slightly better than climber2)
+minimax1x
+minimax2 (19x better than minimax1, 2.2x better than climber2)
+minimax3 (7.3x better than minimax2, 9x better than climber2)
+minimax2x (1.6x better than minimax3, 6.4x better than minimax2, 7x better than minimax1x)

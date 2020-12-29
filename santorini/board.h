@@ -31,10 +31,13 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
+enum class Card { None };
 
 struct Board : public MiniBoard {
     Phase phase = Phase::PlaceWorker;
     Figure player = Figure::Player1; // Will be set to winner in GameOver phase.
+    Card card1 = Card::None;
+    Card card2 = Card::None;
 
     // Inner action state
     std::optional<Coord> moved;
@@ -121,6 +124,11 @@ inline MiniBoard Normalize(const MiniBoard& board) {
         if (Less(m, out.cell)) out.cell = m;
     }
     return out;
+}
+
+inline bool IsEmpty(const MiniBoard& board) {
+    for (const Cell& c : board.cell) if (c.figure != Figure::None || c.level != 0) return false;
+    return true;
 }
 
 namespace std {

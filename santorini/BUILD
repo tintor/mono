@@ -2,17 +2,24 @@ package(default_visibility = ["//visibility:public"])
 load("//:library.bzl", "library")
 
 cc_library(
+    name = "random",
+    hdrs = ["random.h"],
+    srcs = ["random.cc"],
+    deps = ["//core:random", "//core:numeric"],
+)
+
+cc_library(
     name = "model",
-    hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h", "reservoir_sampler.h", "enumerator.h"],
+    hdrs = ["action.h", "board.h", "cell.h", "coord.h", "execute.h", "reservoir_sampler.h", "enumerator.h", "policy.h"],
     srcs = ["execute.cc", "board.cc"],
-    deps = ["@absl//absl/container:flat_hash_map", "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor"],
+    deps = ["@absl//absl/container:flat_hash_map", "//core:numeric", "//core:fmt", "//core:column", "//core:algorithm", "//core:tensor", ":random"],
 )
 
 cc_library(
     name = "greedy",
     hdrs = ["greedy.h"],
     srcs = ["greedy.cc"],
-    deps = [":model", "//core:random"],
+    deps = [":model", ":random"],
 )
 
 cc_library(
@@ -26,7 +33,7 @@ cc_library(
     name = "mcts",
     hdrs = ["mcts.h"],
     srcs = ["mcts.cc"],
-    deps = [":model", ":greedy", "//core:random"],
+    deps = [":model", ":greedy", ":random"],
 )
 
 cc_library(

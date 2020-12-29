@@ -1,29 +1,13 @@
-#include <random>
+#include "santorini/greedy.h"
 
 #include "fmt/core.h"
-#include "core/random.h"
 
+#include "santorini/random.h"
 #include "santorini/execute.h"
 #include "santorini/enumerator.h"
 #include "santorini/reservoir_sampler.h"
 
 using namespace std;
-
-// Computer interface
-// ==================
-
-static std::mt19937_64& Random() {
-    static atomic<size_t> seed = 0;
-    thread_local bool initialized = false;
-    thread_local std::mt19937_64 random;
-    if (!initialized) {
-        random = std::mt19937_64(seed++);
-        initialized = true;
-    }
-    return random;
-}
-
-inline int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
 
 Coord MyRandomFigure(const Board& board, std::mt19937_64& random) {
     Coord out;
@@ -85,29 +69,62 @@ Action AutoGreedy(const Board& board) {
     return choice.empty() ? loose_choice : choice;
 }
 
-const double LevelWeight[] = {0, 1, 10, 10};
 const double kInfinity = std::numeric_limits<double>::infinity();
 
-// TODO
-// - points for every worker which is not fully blocked
-// - number of free cells around every worker (if they are not too tall)
-// - number of squares that my workers can reach in 1 step that opponent's workers can't reach in 2 action? (breaks for Artemis and Hermes)
-// - number of non-domed and non-occupied levels within 1 step from my workers
-// - number of non-domed and non-occupied levels within 2 action from my workers (that were not included in above)
-// - fine tune weights using self-play
-double ClimbRank(Figure player, const Board& board) {
+double ClimbRank(Figure player, const Board& board, const Weights& weights) {
     if (board.phase == Phase::GameOver) return (player == board.player) ? kInfinity : -kInfinity;
 
     double rank = 0;
     const Figure other = Other(player);
-    for (Coord e : kAll) if (board(e).level != 0) {
-        if (board(e).figure == player) rank += LevelWeight[int(board(e).level)];
-        if (board(e).figure == other) rank -= LevelWeight[int(board(e).level)];
+    bool mass = weights.mass1 != 0 || weights.mass2 != 0 || weights.mass3 != 0;
+    for (Coord e : kAll) {
+        const auto level = board(e).level;
+
+        if (board(e).figure == player) {
+            if (level == 1) rank += weights.level1;
+            if (level == 2) rank += weights.level2;
+            if (level == 3) rank += weights.level3;
+
+            if (mass)
+            for (Coord m : kAll) if (m != e && Nearby(e, m) && board(m).figure == Figure::None) {
+                if (board(m).level == 1) rank += weights.mass1;
+                if (board(m).level == 2) rank += weights.mass2;
+                if (board(m).level == 3) rank += weights.mass3;
+            }
+        }
+        if (board(e).figure == other) {
+            if (level == 1) rank -= weights.level1;
+            if (level == 2) rank -= weights.level2;
+            if (level == 3) rank -= weights.level3;
+
+            if (mass)
+            for (Coord m : kAll) if (m != e && Nearby(e, m) && board(m).figure == Figure::None) {
+                if (board(m).level == 1) rank -= weights.mass1;
+                if (board(m).level == 2) rank -= weights.mass2;
+                if (board(m).level == 3) rank -= weights.mass3;
+            }
+        }
+    }
+
+    if (weights.reachable_cell != 0) {
+        for (Coord e : kAll) {
+            Figure f = board(e).figure;
+            if (f == player || f == other) {
+                Board b;
+                b.player = f;
+                size_t reachable = 0;
+                for (Coord j : kAll) if (j != e && board(j).figure == Figure::None && CanMove(b, e, j)) {
+                    reachable += 1;
+                }
+                if (f == player) rank += weights.reachable_cell * reachable;
+                if (f == other) rank -= weights.reachable_cell * reachable;
+            }
+        }
     }
     return rank;
 }
 
-Action AutoClimber(const Board& board) {
+Action AutoClimber(const Board& board, const Weights& weights) {
     auto& random = Random();
     Action choice;
     ReservoirSampler sampler;
@@ -123,7 +140,7 @@ Action AutoClimber(const Board& board) {
             return true;
         }
 
-        double rank = ClimbRank(board.player, new_board);
+        double rank = ClimbRank(board.player, new_board, weights);
         if (rank == best_rank) {
             if (sampler(random)) choice = action;
         } else if (rank > best_rank) {

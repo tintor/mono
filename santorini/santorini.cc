@@ -9,7 +9,10 @@
 #include "core/timestamp.h"
 #include "core/vector.h"
 #include "core/array_deque.h"
+#include "core/algorithm.h"
 
+#include "santorini/random.h"
+#include "santorini/policy.h"
 #include "santorini/execute.h"
 #include "santorini/enumerator.h"
 #include "santorini/greedy.h"
@@ -18,27 +21,6 @@
 #include "santorini/reservoir_sampler.h"
 
 using namespace std;
-
-static std::mt19937_64& Random() {
-    static atomic<size_t> seed = 0;
-    thread_local bool initialized = false;
-    thread_local std::mt19937_64 random;
-    if (!initialized) {
-        random = std::mt19937_64(seed++);
-        initialized = true;
-    }
-    return random;
-}
-
-int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
-
-int ChooseWeighted(double u, cspan<double> weights) {
-    FOR(i, weights.size()) {
-      if (u < weights[i]) return i;
-      u -= weights[i];
-    }
-    return weights.size() - 1;
-}
 
 // Random is used in case of ties.
 template<typename T>
@@ -62,8 +44,6 @@ int Argmax(std::mt19937_64& random, cspan<T> values) {
 // Benchmarks and training
 // -----------------------
 
-using Policy = std::function<Action(const Board&)>;
-
 Figure Battle(const Policy& policy_a, const Policy& policy_b) {
     Board board;
     while (true) {
@@ -81,18 +61,30 @@ Figure Battle(const Policy& policy_a, const Policy& policy_b) {
     }
 }
 
+const Weights w2 = {.mass1 = 0.2, .mass2 = 0.4, .mass3 = 0.8};
+
 const std::unordered_map<string_view, Policy> g_policies = {
     {"random", AutoRandom},
     {"greedy", AutoGreedy},
-    {"climber", AutoClimber},
-    {"mcts100", [](const auto& e) { return AutoMCTS(e, 100); }},
-    {"mcts200", [](const auto& e) { return AutoMCTS(e, 200); }},
-    {"mcts400", [](const auto& e) { return AutoMCTS(e, 400); }},
-    {"mcts800", [](const auto& e) { return AutoMCTS(e, 800); }},
-    {"mcts1600", [](const auto& e) { return AutoMCTS(e, 1600); }},
-    {"minimax6", [](const auto& e) { return AutoMiniMax(e, 6); }},
-    {"minimax9", [](const auto& e) { return AutoMiniMax(e, 9); }},
-    {"minimax12", [](const auto& e) { return AutoMiniMax(e, 12); }}};
+    {"climber", [] LAMBDA(AutoClimber(e))},
+    {"climber2", [] LAMBDA(AutoClimber(e, w2))},
+    {"mcts100", MCTS(100)},
+    {"mcts200", MCTS(200)},
+    {"mcts400", MCTS(400)},
+    {"mcts800", MCTS(800)},
+    {"mcts1600", MCTS(1600)},
+    {"mcts3200", MCTS(3200)},
+    {"mcts6400", MCTS(6400)},
+    {"mcts12800", MCTS(12800)},
+    {"minimax1", MiniMax(1)},
+    {"minimax2", MiniMax(2)},
+    {"minimax3", MiniMax(3)},
+    {"minimax4", MiniMax(4)},
+    {"minimax1x", MiniMax(1, true)},
+    {"minimax2x", MiniMax(2, true)},
+    {"minimax3x", MiniMax(3, true)},
+    {"minimax4x", MiniMax(4, true)},
+};
 
 void AutoBattle(int count, string_view name_a, string_view name_b) {
     const Policy& policy_a = g_policies.at(name_a);
@@ -505,38 +497,13 @@ int main(int argc, char** argv) {
     }
 
     if (argc > 1) {
-        AutoBattle(100, "random", "greedy");
-        AutoBattle(100, "random", "climber");
-        AutoBattle(100, "greedy", "climber");
+        AutoBattle(100, "minimax4", "minimax3x");
+        AutoBattle(100, "minimax3", "minimax3x");
+        AutoBattle(100, "minimax2x", "minimax3x");
 
-        AutoBattle(100, "random", "mcts100");
-        AutoBattle(100, "greedy", "mcts100");
-        AutoBattle(100, "climber", "mcts100");
-
-        AutoBattle(100, "random", "mcts200");
-        AutoBattle(100, "greedy", "mcts200");
-        AutoBattle(100, "climber", "mcts200");
-
-        AutoBattle(100, "random", "mcts400");
-        AutoBattle(100, "greedy", "mcts400");
-        AutoBattle(100, "climber", "mcts400");
-
-        AutoBattle(100, "random", "mcts800");
-        AutoBattle(100, "greedy", "mcts800");
-        AutoBattle(100, "climber", "mcts800");
-
-        AutoBattle(100, "random", "mcts1600");
-        AutoBattle(100, "greedy", "mcts1600");
-        AutoBattle(100, "climber", "mcts1600");
-
-        /*AutoBattle(100, "climber", "minimax12");
-        AutoBattle(1000, "mcts100", "mcts100t");
-        AutoBattle(100, "minimax6", "minimax9");
-        AutoBattle(100, "climber", "minimax9");
-        AutoBattle(100, "climber", "minimax6");
-        AutoBattle(100, "climber", "mcts100");
-        AutoBattle(100, "climber", "mcts200");
-        AutoBattle(100, "climber", "mcts400");*/
+        AutoBattle(100, "minimax4", "minimax4x");
+        AutoBattle(100, "minimax3x", "minimax4x");
+        AutoBattle(100, "minimax3x", "minimax4x");
         return 0;
     }
 

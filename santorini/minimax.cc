@@ -9,19 +9,9 @@
 #include "santorini/execute.h"
 #include "santorini/enumerator.h"
 #include "santorini/greedy.h"
+#include "santorini/random.h"
 
 using namespace std;
-
-static std::mt19937_64& Random() {
-    static atomic<size_t> seed = 0;
-    thread_local bool initialized = false;
-    thread_local std::mt19937_64 random;
-    if (!initialized) {
-        random = std::mt19937_64(seed++);
-        initialized = true;
-    }
-    return random;
-}
 
 // Plan:
 // - parallelize it (in MiniMaxValue, if depth = X then make every subcall in
@@ -30,18 +20,22 @@ static std::mt19937_64& Random() {
 // - use time budget instead of max depth
 // - search in background (while human is thinking)
 
-const double kInfinity = std::numeric_limits<double>::infinity();
+const double kInfinity = numeric_limits<double>::infinity();
 
 // Return value of <initial_board>, from the perspective of <player>.
-static double MiniMaxValue(const Figure player, const Board& initial_board, const int depth, const bool maximize, double alpha, double beta) {
-    if (depth == 0 || initial_board.phase == Phase::GameOver) return ClimbRank(player, initial_board);
+static double MiniMaxValue(const Figure player, const Board& initial_board, const int depth, const bool maximize, double alpha, double beta, const bool climber2) {
+    Weights weights;
+    if (climber2) weights = Weights{.mass1 = 0.2, .mass2 = 0.4, .mass3 = 0.8};
+
+    if (depth == 0 || initial_board.phase == Phase::GameOver) return ClimbRank(player, initial_board, weights);
 
 
-    std::vector<std::pair<double, Board>> boards;
-    AllValidActions(initial_board, [&boards, player](Action& action, const Board& board) {
-        boards << std::pair{ClimbRank(player, board), board};
+    vector<pair<double, Board>> boards;
+    AllValidActions(initial_board, [&boards, player, &weights](Action& action, const Board& board) {
+        boards << pair{ClimbRank(player, board, weights), board};
         return true;
     });
+    // TODO Compare MiniMax with and without this sorting!
     // Sort boards by value (alpha-beta will take care of short-circuiting).
     if (maximize) {
         sort(boards, [](const auto& a, const auto& b) { return a.first > b.first; });
@@ -54,7 +48,7 @@ static double MiniMaxValue(const Figure player, const Board& initial_board, cons
     // TODO In Santorini, if no action is possible for maximizing player that is considered defeat. It is accidental here that -inf will be returned in that case.
     double best_m = maximize ? -kInfinity : kInfinity;
     for (const auto& [value, board] : boards) {
-        const double m = (depth == 1 || board.phase == Phase::GameOver) ? value : MiniMaxValue(player, board, depth - 1, !maximize, alpha, beta);
+        const double m = (depth == 1 || board.phase == Phase::GameOver) ? value : MiniMaxValue(player, board, depth - 1, !maximize, alpha, beta, climber2);
         if (maximize) {
             if (m > best_m) best_m = m;
             if (best_m > alpha) alpha = best_m;
@@ -68,7 +62,7 @@ static double MiniMaxValue(const Figure player, const Board& initial_board, cons
     return best_m;
 }
 
-Action AutoMiniMax(const Board& initial_board, const int depth) {
+Action AutoMiniMax(const Board& initial_board, const int depth, bool climber2) {
     Action best_action;
 
     size_t count = 0;
@@ -85,7 +79,7 @@ Action AutoMiniMax(const Board& initial_board, const int depth) {
     double beta = kInfinity;
     ReservoirSampler sampler;
     AllValidActions(initial_board, [&](const Action& action, const Board& board) {
-        double m = MiniMaxValue(initial_board.player, board, depth, /*maximize*/false, alpha, beta);
+        double m = MiniMaxValue(initial_board.player, board, depth, /*maximize*/false, alpha, beta, climber2);
         if (m == best_m) {
             if (sampler(random)) best_action = action;
         } else if (m > best_m) {

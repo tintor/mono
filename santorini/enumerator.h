@@ -13,11 +13,38 @@ bool Visit(const Board& board, const Step& step, const Visitor& visit) {
 
 template <typename Visitor>
 bool AllValidSteps(const Board& board, const Visitor& visit) {
-    VISIT(NextStep{});
     if (board.phase == Phase::PlaceWorker) {
+        VISIT(NextStep{});
         for (Coord e : kAll) VISIT(PlaceStep{e});
         return true;
     }
+
+    // Faster logic when playing without cards.
+    if (board.card1 == Card::None && board.card2 == Card::None) {
+        if (!board.moved) {
+            // Generate moves
+            for (Coord e : kAll) {
+                if (board(e).figure == board.player) {
+                    // TODO Only iterate nearby e!
+                    for (Coord d : kAll)
+                        if (d != e && Nearby(e, d) && board(d).figure == Figure::None) VISIT((MoveStep{e, d}));
+                }
+            }
+            return true;
+        }
+        if (!board.built) {
+            // Generate builds
+            // TODO Only iterate nearby board.moved.value()!
+            for (Coord d : kAll) if (d != *board.moved && Nearby(*board.moved, d) && board(d).figure == Figure::None) {
+                VISIT((BuildStep{d, board(d).level == 3}));
+            }
+        }
+        VISIT(NextStep{});
+        return true;
+    }
+
+    // Generic case
+    VISIT(NextStep{});
     for (Coord e : kAll) {
         if (board(e).figure == board.player) {
             for (Coord d : kAll)

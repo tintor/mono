@@ -7,27 +7,15 @@
 #include "santorini/reservoir_sampler.h"
 #include "santorini/greedy.h"
 #include "santorini/execute.h"
+#include "santorini/random.h"
 
 using namespace std;
 
-static std::mt19937_64& Random() {
-    static atomic<size_t> seed = 0;
-    thread_local bool initialized = false;
-    thread_local std::mt19937_64 random;
-    if (!initialized) {
-        random = std::mt19937_64(seed++);
-        initialized = true;
-    }
-    return random;
-}
-
-inline int RandomInt(int count, std::mt19937_64& random) { return std::uniform_int_distribution<int>(0, count - 1)(random); }
-
 // Rollout board using AutoGreedy!
-static size_t Rollout(Figure player, Board board) {
+static size_t Rollout(Figure player, Board board, bool climber) {
     Action action;
     while (true) {
-        action = AutoGreedy(board);
+        action = climber ? AutoClimber(board) : AutoGreedy(board);
         for (const Step& step : action) {
             Check(Execute(board, step) == nullopt);
             if (board.phase == Phase::GameOver) return (board.player == player) ? 1 : 0;
@@ -68,7 +56,7 @@ static void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
     });
 }
 
-static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node) {
+static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node, bool climber) {
     if (node->board.phase == Phase::GameOver) {
         size_t e = (player == node->board.player) ? 1 : 0;
         node->w += e;
@@ -78,14 +66,14 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
 
     if (node->children.size() > 0) {
         size_t i = ChooseChild(N, node->children);
-        size_t e = MCTS_Iteration(N, player, node->children[i]);
+        size_t e = MCTS_Iteration(N, player, node->children[i], climber);
         node->w += e;
         node->n += 1;
         return e;
     }
 
     if (node->n == 0) {
-        size_t e = Rollout(player, node->board);
+        size_t e = Rollout(player, node->board, climber);
         node->w += e;
         node->n += 1;
         return e;
@@ -95,7 +83,7 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
     Check(node->children.size() > 0);
 
     auto& child = node->children[RandomInt(node->children.size(), Random())];
-    size_t e = MCTS_Iteration(N, player, child);
+    size_t e = MCTS_Iteration(N, player, child, climber);
     node->w += e;
     node->n += 1;
     return e;
@@ -113,7 +101,7 @@ static optional<Action> WinAction(const Board& board) {
     return win_action;
 }
 
-Action AutoMCTS(const Board& board, const size_t iterations) {
+Action AutoMCTS(const Board& board, const size_t iterations, bool climber) {
     auto wa = WinAction(board);
     if (wa.has_value()) return wa.value();
 
@@ -123,7 +111,7 @@ Action AutoMCTS(const Board& board, const size_t iterations) {
 
     for (size_t i = 0; i < iterations; i++) {
         size_t ci = ChooseChild(i, children);
-        MCTS_Iteration(i, board.player, children[ci]);
+        MCTS_Iteration(i, board.player, children[ci], climber);
         //if ((i + 1) % 100 == 0) print("{} mcts iterations\n", i + 1);
     }
 

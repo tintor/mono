@@ -27,6 +27,7 @@ struct Coord {
 
 inline bool operator==(Coord a, Coord b) { return a.v == b.v; }
 inline bool operator!=(Coord a, Coord b) { return !(a == b); }
+inline bool operator<(Coord a, Coord b) { return a.v < b.v; }
 
 inline Coord Transpose(Coord e) { return {e.y(), e.x()}; }
 
@@ -60,4 +61,23 @@ inline std::vector<Coord> All() {
     return out;
 }
 
+inline std::vector<Coord> Interior() {
+    std::vector<Coord> out;
+    out.reserve(9);
+    for (int x = 0; x < 3; x++)
+        for (int y = 0; y < 3; y++) out.emplace_back(x + 1, y + 1);
+    return out;
+}
+
+inline std::vector<Coord> Exterior() {
+    std::vector<Coord> out;
+    out.reserve(16);
+    for (int x = 0; x < 5; x++)
+        for (int y = 0; y < 5; y++) if (x == 0 || x == 4 || y == 0 || y == 4) out.emplace_back(x, y);
+    return out;
+}
+
 const std::vector<Coord> kAll = All();
+const std::vector<Coord> kInterior = Interior();
+const std::vector<Coord> kExterior = Exterior();
+const Coord kCenter = {2, 2};
