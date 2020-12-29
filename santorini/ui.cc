@@ -101,9 +101,9 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int step, in
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_5) {
             g_board_copy = g_board;
-            g_ai_action = QuickStart(MiniMax(1, true))(g_board);
+            g_ai_action = QuickStart(MiniMax(2, true))(g_board);
         }
-        if (step == GLFW_PRESS && key == GLFW_KEY_5) {
+        if (step == GLFW_PRESS && key == GLFW_KEY_6) {
             g_board_copy = g_board;
             g_ai_action = QuickStart(MiniMax(4, true))(g_board);
         }

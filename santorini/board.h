@@ -31,7 +31,7 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
-enum class Card { None, Apollo, Artemis };
+enum class Card { None, Apollo, Artemis, Atlas };
 
 inline bool DeduplicateBoards(Card c) {
     return c == Card::Artemis;
@@ -41,6 +41,7 @@ inline std::string_view CardName(Card c) {
     if (c == Card::None) return "none";
     if (c == Card::Apollo) return "Apollo";
     if (c == Card::Artemis) return "Artemis";
+    if (c == Card::Atlas) return "Atlas";
     Check(false);
     return "";
 }

@@ -515,6 +515,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    RunUI(Card::Apollo, Card::Artemis);
+    RunUI(Card::Atlas, Card::Artemis);
     return 0;
 }

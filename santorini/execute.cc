@@ -113,7 +113,7 @@ optional<string_view> CanBuild(const Board& board, Coord dest, bool dome) {
     if (!board.moved) return "need to move";
     if (board.built) return "already built";
     if (board(dest).figure != Figure::None) return "can only build on empty space";
-    if (dome && board(dest).level != 3) return "dome can only be built on level 3";
+    if (dome && board(dest).level != 3 && board.my_card() != Card::Atlas) return "dome can only be built on level 3";
     if (!dome && board(dest).level == 3) return "floor can only be built on levels 0, 1 and 2";
     if (!Nearby(*board.moved, dest)) return "can only build near moved figure";
     return nullopt;
