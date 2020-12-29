@@ -12,10 +12,12 @@
 using namespace std;
 
 // Rollout board using AutoGreedy!
-static size_t Rollout(Figure player, Board board, bool climber) {
+static size_t Rollout(Figure player, Board board, bool climber2) {
+    Weights weights{.mass1 = 0.2, .mass2 = 0.4, .mass3 = 0.8};
+
     Action action;
     while (true) {
-        action = climber ? AutoClimber(board) : AutoGreedy(board);
+        action = climber2 ? AutoClimber(board, weights) : AutoGreedy(board);
         for (const Step& step : action) {
             Check(Execute(board, step) == nullopt);
             if (board.phase == Phase::GameOver) return (board.player == player) ? 1 : 0;
@@ -56,7 +58,7 @@ static void Expand(const Board& board, vector<std::unique_ptr<Node>>& out) {
     });
 }
 
-static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node, bool climber) {
+static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& node, bool climber2) {
     if (node->board.phase == Phase::GameOver) {
         size_t e = (player == node->board.player) ? 1 : 0;
         node->w += e;
@@ -66,14 +68,14 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
 
     if (node->children.size() > 0) {
         size_t i = ChooseChild(N, node->children);
-        size_t e = MCTS_Iteration(N, player, node->children[i], climber);
+        size_t e = MCTS_Iteration(N, player, node->children[i], climber2);
         node->w += e;
         node->n += 1;
         return e;
     }
 
     if (node->n == 0) {
-        size_t e = Rollout(player, node->board, climber);
+        size_t e = Rollout(player, node->board, climber2);
         node->w += e;
         node->n += 1;
         return e;
@@ -83,7 +85,7 @@ static size_t MCTS_Iteration(size_t N, Figure player, std::unique_ptr<Node>& nod
     Check(node->children.size() > 0);
 
     auto& child = node->children[RandomInt(node->children.size(), Random())];
-    size_t e = MCTS_Iteration(N, player, child, climber);
+    size_t e = MCTS_Iteration(N, player, child, climber2);
     node->w += e;
     node->n += 1;
     return e;
@@ -101,7 +103,7 @@ static optional<Action> WinAction(const Board& board) {
     return win_action;
 }
 
-Action AutoMCTS(const Board& board, const size_t iterations, bool climber) {
+Action AutoMCTS(const Board& board, const size_t iterations, bool climber2) {
     auto wa = WinAction(board);
     if (wa.has_value()) return wa.value();
 
@@ -111,7 +113,7 @@ Action AutoMCTS(const Board& board, const size_t iterations, bool climber) {
 
     for (size_t i = 0; i < iterations; i++) {
         size_t ci = ChooseChild(i, children);
-        MCTS_Iteration(i, board.player, children[ci], climber);
+        MCTS_Iteration(i, board.player, children[ci], climber2);
         //if ((i + 1) % 100 == 0) print("{} mcts iterations\n", i + 1);
     }
 
