@@ -8,6 +8,8 @@
 using std::optional;
 using std::string_view;
 
+bool AreCardsAllowed(Card card1, Card card2);
+
 optional<string_view> Next(Board& board);
 optional<string_view> Place(Board& board, Coord dest);
 

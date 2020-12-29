@@ -45,6 +45,7 @@ int Argmax(std::mt19937_64& random, cspan<T> values) {
 // -----------------------
 
 Figure Battle(const Policy& policy_a, const Policy& policy_b, Card card_a, Card card_b) {
+    Check(AreCardsAllowed(card_a, card_b));
     Board board;
     board.card1 = card_a;
     board.card2 = card_b;
@@ -512,6 +513,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    RunUI(Card::Demeter, Card::Demeter);
+    RunUI(Card::None, Card::Athena);
     return 0;
 }

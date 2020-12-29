@@ -5,6 +5,12 @@ using namespace std;
 // Board and judge
 // ===============
 
+bool AreCardsAllowed(Card card1, Card card2) {
+    if (card1 == card2 && card1 != Card::None) return false;
+    // TODO if (card2 == Card::Bia) return false; // Bia can't play second.
+    return true;
+}
+
 optional<string_view> CanMove(const Board& board, Coord src, Coord dest);
 
 bool IsMoveBlocked(const Board& board) {
@@ -38,6 +44,7 @@ optional<string_view> Next(Board& board) {
     board.artemis_move_src = std::nullopt;
     board.moves = 0;
     board.builds = 0;
+    if (board.my_card() == Card::Athena) board.athena_moved_up = false;
 
     if (board.phase == Phase::PlaceWorker) {
         if (Count(board, L(e.figure != Figure::None)) == 4) board.phase = Phase::MoveBuild;
@@ -68,6 +75,8 @@ optional<string_view> Place(Board& board, Coord dest) {
 optional<string_view> CanMove(const Board& board, Coord src, Coord dest) {
     if (!IsValid(src) || !IsValid(dest)) return "invalid coord";
     if (board.phase != Phase::MoveBuild) return "bad phase";
+    if (board(src).figure != board.player) return "player doesn't have figure at src";
+    if (!Nearby(src, dest)) return "src and dest aren't nearby";
 
     if (board.my_card() == Card::Artemis) {
         if (board.build) return "Artemis can't move after building";
@@ -78,16 +87,15 @@ optional<string_view> CanMove(const Board& board, Coord src, Coord dest) {
         if (board.moved) return "moved already";
     }
 
-    if (board(src).figure != board.player) return "player doesn't have figure at src";
-
     if (board.my_card() == Card::Apollo) {
         if (board(dest).figure != Figure::None && board(dest).figure != Other(board.player)) return "Apollo can't move to square with non-opponent figure";
     } else {
         if (board(dest).figure != Figure::None) return "dest contains another figure";
     }
 
-    if (board(dest).level - board(src).level > 1) return "dest is too high";
-    if (!Nearby(src, dest)) return "src and dest aren't nearby";
+    const auto delta = board(dest).level - board(src).level;
+    if (delta == 1 && board.athena_moved_up) return "Athena prevents moving up this turn";
+    if (delta > 1) return "dest is too high";
     return nullopt;
 }
 
@@ -99,7 +107,7 @@ optional<string_view> Move(Board& board, Coord src, Coord dest) {
     board(dest).figure = board.player;
     board.moved = dest;
     board.moves += 1;
-
+    if (board.my_card() == Card::Athena && board(dest).level > board(src).level) board.athena_moved_up = true;
     if (board.my_card() == Card::Artemis && !board.artemis_move_src) board.artemis_move_src = src;
 
     if (board(dest).level == 3) board.phase = Phase::GameOver;

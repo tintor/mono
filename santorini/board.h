@@ -31,7 +31,7 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
-enum class Card { None, Apollo, Artemis, Atlas, Demeter };
+enum class Card { None, Apollo, Artemis, Athena, Atlas, Demeter };
 
 inline bool DeduplicateBoards(Card c) {
     return c == Card::Artemis || c == Card::Demeter;
@@ -41,6 +41,7 @@ inline std::string_view CardName(Card c) {
     if (c == Card::None) return "none";
     if (c == Card::Apollo) return "Apollo";
     if (c == Card::Artemis) return "Artemis";
+    if (c == Card::Athena) return "Athena";
     if (c == Card::Atlas) return "Atlas";
     if (c == Card::Demeter) return "Demeter";
     Check(false);
@@ -52,6 +53,7 @@ struct Board : public MiniBoard {
     Figure player = Figure::Player1; // Will be set to winner in GameOver phase.
     Card card1 = Card::None;
     Card card2 = Card::None;
+    bool athena_moved_up = false;
 
     Card my_card() const { return (player == Figure::Player1) ? card1 : card2; }
     Card opp_card() const { return (player == Figure::Player1) ? card2 : card1; }
@@ -68,7 +70,8 @@ struct Board : public MiniBoard {
     Cell& operator()(Coord c) { return cell[c.v]; }
 
     bool operator==(const Board& b) const {
-        return phase == b.phase && player == b.player && moved == b.moved && build == b.build && cell == b.cell;
+        return phase == b.phase && player == b.player && card1 == b.card1 && card2 == b.card2 && athena_moved_up == b.athena_moved_up
+            && moved == b.moved && build == b.build && moves == b.moves && builds == b.builds && artemis_move_src == b.artemis_move_src;
     }
 };
 
