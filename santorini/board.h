@@ -31,13 +31,23 @@ private:
 };
 
 enum class Phase { PlaceWorker, MoveBuild, GameOver };
-enum class Card { None };
+enum class Card { None, Apollo };
+
+inline std::string_view CardName(Card c) {
+    if (c == Card::None) return "none";
+    if (c == Card::Apollo) return "Apollo";
+    Check(false);
+    return "";
+}
 
 struct Board : public MiniBoard {
     Phase phase = Phase::PlaceWorker;
     Figure player = Figure::Player1; // Will be set to winner in GameOver phase.
     Card card1 = Card::None;
     Card card2 = Card::None;
+
+    Card my_card() const { return (player == Figure::Player1) ? card1 : card2; }
+    Card opp_card() const { return (player == Figure::Player1) ? card2 : card1; }
 
     // Inner action state
     std::optional<Coord> moved;

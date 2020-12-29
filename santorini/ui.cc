@@ -84,23 +84,28 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int step, in
     if (g_ai_action.empty()) {
         if (step == GLFW_PRESS && key == GLFW_KEY_1) {
             g_board_copy = g_board;
-            g_ai_action = AutoRandom(g_board);
+            g_ai_action = AutoGreedy(g_board);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_2) {
             g_board_copy = g_board;
-            g_ai_action = AutoGreedy(g_board);
+            g_ai_action = AutoClimber(g_board);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_3) {
             g_board_copy = g_board;
-            g_ai_action = AutoClimber(g_board);
+            Weights weights{.mass1 = 0.2, .mass2 = 0.4, .mass3 = 0.8};
+            g_ai_action = AutoClimber(g_board, weights);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_4) {
             g_board_copy = g_board;
-            g_ai_action = AutoMCTS(g_board, 100000);
+            g_ai_action = AutoMCTS(g_board, 3200, true);
         }
         if (step == GLFW_PRESS && key == GLFW_KEY_5) {
             g_board_copy = g_board;
-            g_ai_action = AutoMiniMax(g_board, 4);
+            g_ai_action = AutoMiniMax(g_board, 2, true);
+        }
+        if (step == GLFW_PRESS && key == GLFW_KEY_5) {
+            g_board_copy = g_board;
+            g_ai_action = AutoMiniMax(g_board, 4, true);
         }
     }
 }
@@ -266,11 +271,15 @@ static void Render(const Board& board, View& view) {
         view.mono.render(format("Player {}", PlayerName(board.player)));
         if (board.moved) view.mono.render(" Moved");
         if (board.built) view.mono.render(" Built");
+        view.mono.render(format(" {} vs {}", CardName(board.my_card()), CardName(board.opp_card())));
     }
     glDisable(GL_BLEND);
 }
 
-void RunUI() {
+void RunUI(Card card1, Card card2) {
+    g_board.card1 = card1;
+    g_board.card2 = card2;
+
     auto window = CreateWindow({.width = Width, .height = Height, .resizeable = false});
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);

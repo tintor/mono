@@ -76,6 +76,14 @@ const std::unordered_map<string_view, Policy> g_policies = {
     {"mcts3200", MCTS(3200)},
     {"mcts6400", MCTS(6400)},
     {"mcts12800", MCTS(12800)},
+    {"mcts100c2", MCTS(100, true)},
+    {"mcts200c2", MCTS(200, true)},
+    {"mcts400c2", MCTS(400, true)},
+    {"mcts800c2", MCTS(800, true)},
+    {"mcts1600c2", MCTS(1600, true)},
+    {"mcts3200c2", MCTS(3200, true)},
+    {"mcts6400c2", MCTS(6400, true)},
+    {"mcts12800c2", MCTS(12800, true)},
     {"minimax1", MiniMax(1)},
     {"minimax2", MiniMax(2)},
     {"minimax3", MiniMax(3)},
@@ -471,7 +479,7 @@ void Browse(const Values& values) {
     }
 }
 
-void RunUI();
+void RunUI(Card card1, Card card2);
 
 int main(int argc, char** argv) {
     InitSegvHandler();
@@ -497,16 +505,16 @@ int main(int argc, char** argv) {
     }
 
     if (argc > 1) {
-        AutoBattle(100, "minimax4", "minimax3x");
-        AutoBattle(100, "minimax3", "minimax3x");
-        AutoBattle(100, "minimax2x", "minimax3x");
-
-        AutoBattle(100, "minimax4", "minimax4x");
-        AutoBattle(100, "minimax3x", "minimax4x");
-        AutoBattle(100, "minimax3x", "minimax4x");
+        AutoBattle(100, "mcts200c2", "minimax1");
+        AutoBattle(100, "mcts400c2", "minimax1");
+        AutoBattle(100, "mcts800c2", "minimax1");
+        AutoBattle(100, "mcts1600c2", "minimax1");
+        AutoBattle(100, "mcts3200c2", "minimax1");
+        AutoBattle(100, "mcts6400c2", "minimax1");
+        AutoBattle(100, "mcts12800c2", "minimax1");
         return 0;
     }
 
-    RunUI();
+    RunUI(Card::Apollo, Card::Apollo);
     return 0;
 }

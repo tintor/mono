@@ -67,7 +67,11 @@ optional<string_view> CanMove(const Board& board, Coord src, Coord dest) {
     if (board.phase != Phase::MoveBuild) return "bad phase";
     if (board.moved) return "moved already";
     if (board(src).figure != board.player) return "player doesn't have figure at src";
-    if (board(dest).figure != Figure::None) return "dest isn't empty";
+    if (board.my_card() == Card::Apollo) {
+        if (board(dest).figure != Figure::None && board(dest).figure != Other(board.player)) return "dest must be empty or have opponent's worker";
+    } else {
+        if (board(dest).figure != Figure::None) return "dest isn't empty";
+    }
     if (board(dest).level - board(src).level > 1) return "dest is too high";
     if (!Nearby(src, dest)) return "src and dest aren't nearby";
     return nullopt;
@@ -77,8 +81,8 @@ optional<string_view> CanMove(const Board& board, Coord src, Coord dest) {
 optional<string_view> Move(Board& board, Coord src, Coord dest) {
     auto s = CanMove(board, src, dest);
     if (s != nullopt) return s;
+    board(src).figure = board(dest).figure;
     board(dest).figure = board.player;
-    board(src).figure = Figure::None;
     board.moved = dest;
     if (board(dest).level == 3) board.phase = Phase::GameOver;
     return nullopt;

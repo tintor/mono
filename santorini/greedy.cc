@@ -65,7 +65,6 @@ Action AutoGreedy(const Board& board) {
         }
         return true;
     });
-    Check(sampler.count > 0);
     return choice.empty() ? loose_choice : choice;
 }
 
